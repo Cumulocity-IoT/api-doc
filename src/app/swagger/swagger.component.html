@@ -1,0 +1,54 @@
+<c8y-title>
+  {{ (spec$ | async)?.app.appLabel | translate }}
+</c8y-title>
+
+<c8y-action-bar-item [placement]="'right'">
+  <button
+    class="btn btn-link"
+    title="{{ 'Download' | translate }}"
+    type="button"
+    (click)="downloadSpecFile()"
+  >
+    <i
+      class="m-r-4"
+      [c8yIcon]="'download'"
+    ></i>
+    <span translate>Download</span>
+  </button>
+</c8y-action-bar-item>
+@if (!(shouldHideAlert$ | async)) {
+  <div class="d-flex j-c-center m-t-16 m-b-16">
+    <div
+      class="alert alert-warning"
+      role="alert"
+    >
+      <button
+        class="close"
+        aria-label="Close alert"
+        type="button"
+        (click)="hideAlert()"
+      >
+        <span aria-hidden="true">
+          <i [c8yIcon]="'times'"></i>
+        </span>
+        <span class="sr-only">Close</span>
+      </button>
+      <strong translate>Authenticated requests (use with caution):</strong>
+      <p translate>
+        Authentication is provided via the current application session (cookie based). When you copy
+        cURL snippets, ensure you include the session cookie or any other authentication method, to
+        authenticate your requests.
+      </p>
+      <p translate>
+        The "Try it out" feature executes real API calls against your live system. DELETE, PUT, and
+        POST operations will modify or remove data permanently. Always verify your inputs before
+        executing destructive operations.
+      </p>
+    </div>
+  </div>
+}
+
+<div
+  id="api-documentation"
+  #apiDocElement
+></div>

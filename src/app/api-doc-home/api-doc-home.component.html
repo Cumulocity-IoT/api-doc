@@ -1,0 +1,108 @@
+<c8y-title>API Documentation</c8y-title>
+
+<div class="card">
+  <div class="card-block p-32">
+    <h1 translate>Welcome to Cumulocity API Documentation</h1>
+    <p
+      class="m-b-16 text-muted"
+      translate
+    >
+      Your comprehensive, version-aligned API reference for the Cumulocity IoT Platform
+    </p>
+    <hr class="m-b-16" />
+    <p
+      class="m-b-24"
+      translate
+    >
+      This application provides complete API documentation extracted directly from your installed
+      Cumulocity core and microservices. Every endpoint, parameter, and response is automatically
+      synchronized with your current platform version, ensuring accuracy and reliability.
+    </p>
+  </div>
+</div>
+
+<div
+  class="card-group"
+  aria-label="API documentation features"
+  role="list"
+>
+  <!-- Card 1: How to Use -->
+  <div
+    class="col-lg-6"
+    role="listitem"
+  >
+    <div class="card">
+      <div class="card-header separator">
+        <p
+          class="card-title"
+          translate
+        >
+          How to use this app
+        </p>
+      </div>
+      <div class="card-block">
+        <p translate>
+          This application provides comprehensive API documentation using the industry-standard
+          Swagger/OpenAPI format. Each API endpoint is fully documented with:
+        </p>
+        <ul class="m-t-16 m-b-16">
+          <li>
+            <strong translate>Complete specifications:</strong>
+            <p translate>Parameters, request/response schemas, and examples</p>
+          </li>
+          <li>
+            <strong translate>Try it out:</strong>
+            <p translate>Execute API calls directly from your browser using your current session</p>
+          </li>
+          <li>
+            <strong translate>Code samples:</strong>
+            <p translate>See real request and response examples for each endpoint</p>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Card 2: API List -->
+  <div
+    class="col-lg-6"
+    role="listitem"
+  >
+    <div class="card">
+      <div class="card-header separator">
+        <p
+          class="card-title"
+          translate
+        >
+          Available APIs
+        </p>
+      </div>
+      <c8y-list-group
+        class="c8y-nav-stacked"
+        role="list"
+      >
+        @for (app of documentedApps$ | async; track app.id) {
+          <c8y-li
+            class="c8y-stacked-item"
+            role="listitem"
+            [selectable]="false"
+            [routerLink]="`/api-docs/${app.id}`"
+          >
+            <c8y-li-icon>
+              <c8y-app-icon
+                class="icon-40"
+                [app]="app"
+              ></c8y-app-icon>
+            </c8y-li-icon>
+            <c8y-li-body class="icon-flex">
+              <strong>{{ app.appLabel }}</strong>
+            </c8y-li-body>
+            <c8y-li-footer translate>
+              {{ app.description || 'No description provided' }}
+            </c8y-li-footer>
+          </c8y-li>
+        }
+      </c8y-list-group>
+    </div>
+  </div>
+</div>
