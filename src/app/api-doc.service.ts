@@ -1,7 +1,18 @@
 import { inject, Injectable } from '@angular/core';
 import { ApplicationService } from '@c8y/client';
 import { AppStateService, HumanizeAppNamePipe } from '@c8y/ngx-components';
-import { combineLatest, from, map, Observable, of, shareReplay, switchMap, take } from 'rxjs';
+import {
+  combineLatest,
+  distinctUntilChanged,
+  filter,
+  from,
+  map,
+  Observable,
+  of,
+  shareReplay,
+  switchMap,
+  take
+} from 'rxjs';
 import { ApiDocApp } from './api-doc-app.model';
 import { sortBy } from 'lodash';
 import { gettext } from '@c8y/ngx-components/gettext';
@@ -36,11 +47,24 @@ export class ApiDocService {
    */
   getApiDocApps(): Observable<ApiDocApp[]> {
     if (!this.cache$) {
+      const appsOfCurrentUser$ = this.appStateService.currentUser.pipe(
+        map(user => user?.id),
+        distinctUntilChanged(),
+        filter(userId => !!userId),
+        switchMap(userId =>
+          from(
+            this.appService.listByUser(userId, {
+              pageSize: 2000
+            })
+          )
+        )
+      );
       this.cache$ = combineLatest([
-        from(this.appService.list({ pageSize: 2000 })),
-        this.appStateService.currentApplication
+        appsOfCurrentUser$,
+        this.appStateService.currentApplication,
+        this.appStateService.currentTenant
       ]).pipe(
-        map(([apps, currentApp]) => {
+        map(([apps, currentApp, currentTenant]) => {
           // Update coreApiDocApps with current app's contextPath
           const coreApiDoc: ApiDocApp = {
             ...this.CORE_API_DOCS_APP,
@@ -53,25 +77,51 @@ export class ApiDocService {
           );
           return {
             appsWithOpenApiSpec: sortBy(appsWithOpenApiSpec, app => app.name?.toLowerCase() || ''),
-            coreApiDoc
+            coreApiDoc,
+            currentTenant
           };
         }),
-        switchMap(({ appsWithOpenApiSpec, coreApiDoc }) => {
+        switchMap(({ appsWithOpenApiSpec, coreApiDoc, currentTenant }) => {
           if (appsWithOpenApiSpec.length === 0) {
             return of([coreApiDoc] as ApiDocApp[]);
           }
-          const appObservables = appsWithOpenApiSpec.map(app =>
-            this.humanize.transform(app.name).pipe(
-              map(
-                humanizedName =>
-                  ({
-                    ...app,
-                    appLabel: humanizedName,
-                    downloadPath: `/service/${app.contextPath}/${app.manifest['openApiSpec']}`
-                  }) as ApiDocApp
+          const appObservables: Observable<ApiDocApp>[] = [];
+          for (const app of appsWithOpenApiSpec) {
+            if (!app.name || !app.manifest) {
+              continue;
+            }
+
+            const isSubscribedApp = currentTenant?.applications?.references?.some(
+              ref => ref.application.id === app.id
+            );
+            if (!isSubscribedApp) {
+              continue;
+            }
+            const openApiSpecSettings: string | { label: string; path: string }[] =
+              app.manifest['openApiSpec'];
+
+            const entriesForApp: { label: string; path: string }[] =
+              typeof openApiSpecSettings === 'string'
+                ? [{ label: app.name, path: openApiSpecSettings }]
+                : openApiSpecSettings;
+
+            appObservables.push(
+              ...entriesForApp.map(entry =>
+                this.humanize.transform(entry.label).pipe(
+                  map(
+                    humanizedName =>
+                      ({
+                        ...app,
+                        id: `${app.id}-${entry.path}`,
+                        appLabel: humanizedName,
+                        downloadPath: `/service/${app.contextPath}/${entry.path}`
+                      }) as ApiDocApp
+                  )
+                )
               )
-            )
-          );
+            );
+          }
+
           return combineLatest(appObservables).pipe(map(apiDocApps => [coreApiDoc, ...apiDocApps]));
         }),
         shareReplay(1)
