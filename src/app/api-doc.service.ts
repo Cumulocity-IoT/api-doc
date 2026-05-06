@@ -29,7 +29,7 @@ export class ApiDocService {
   private readonly CORE_API_DOCS_APP: ApiDocApp = {
     id: 'core-api',
     name: gettext('Core API'),
-    description: gettext('Cumulocity IoT Core API Documentation'),
+    description: gettext('Cumulocity Core API documentation'),
     contextPath: 'api-doc',
     downloadPath: './c8y-oas.yml',
     icon: {

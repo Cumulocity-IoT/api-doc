@@ -18,7 +18,7 @@ export class ApiDocNavigatorFactory implements ExtensionFactory<NavigatorNode> {
         return new NavigatorNode({
           path: 'api-docs',
           icon: 'api',
-          label: gettext('API Documentation'),
+          label: gettext('API documentation'),
           priority: 1000,
           children: apps.map(
             (app: ApiDocApp, index: number) =>

@@ -21,7 +21,7 @@ export default {
       [appName]: ['apiDocProviders']
     },
     blueprintDeploymentOptions: {
-      name: gettext('API Documentation'),
+      name: gettext('API documentation'),
       contextPath: 'api_doc',
       key: 'api_doc-application-key'
     },
@@ -29,7 +29,7 @@ export default {
     availability: 'SHARED',
     exports: [
       {
-        name: gettext('API Documentation'),
+        name: gettext('API documentation'),
         module: 'apiDocProviders',
         path: './src/app/api-doc.providers',
         description: gettext('A tool to view API documentation of installed applications.')

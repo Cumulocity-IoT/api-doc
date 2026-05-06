@@ -1,8 +1,8 @@
-<c8y-title>API Documentation</c8y-title>
+<c8y-title>{{ 'API documentation' | translate }}</c8y-title>
 
 <div class="card">
   <div class="card-block p-32">
-    <h1 translate>Welcome to Cumulocity API Documentation</h1>
+    <h1 translate>Welcome to the Cumulocity API documentation</h1>
     <p
       class="m-b-16 text-muted"
       translate
@@ -23,7 +23,7 @@
 
 <div
   class="card-group"
-  aria-label="API documentation features"
+  aria-label="{{ 'API documentation features' | translate }}"
   role="list"
 >
   <!-- Card 1: How to Use -->
@@ -97,8 +97,9 @@
             <c8y-li-body class="icon-flex">
               <strong>{{ app.appLabel }}</strong>
             </c8y-li-body>
-            <c8y-li-footer translate>
-              {{ app.description || 'No description provided' }}
+            <c8y-li-footer>
+              @let noDescription = 'No description provided' | translate;
+              {{ (app.description | translate) || noDescription }}
             </c8y-li-footer>
           </c8y-li>
         }

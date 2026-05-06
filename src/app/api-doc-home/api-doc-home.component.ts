@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import {
   AppIconComponent,
   C8yTranslateDirective,
+  C8yTranslatePipe,
   ListGroupComponent,
   ListItemBodyComponent,
   ListItemComponent,
@@ -27,6 +28,7 @@ import { ApiDocService } from '../api-doc.service';
     AsyncPipe,
     RouterLink,
     C8yTranslateDirective,
+    C8yTranslatePipe,
     AppIconComponent
   ]
 })
