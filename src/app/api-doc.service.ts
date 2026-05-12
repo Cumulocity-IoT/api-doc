@@ -106,13 +106,13 @@ export class ApiDocService {
                 : openApiSpecSettings;
 
             appObservables.push(
-              ...entriesForApp.map(entry =>
+              ...entriesForApp.map((entry, index) =>
                 this.humanize.transform(entry.label).pipe(
                   map(
                     humanizedName =>
                       ({
                         ...app,
-                        id: `${app.id}-${entry.path}`,
+                        id: `${app.id}-${index}`,
                         appLabel: humanizedName,
                         downloadPath: `/service/${app.contextPath}/${entry.path}`
                       }) as ApiDocApp
