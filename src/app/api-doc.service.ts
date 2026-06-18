@@ -1,6 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { ApplicationService } from '@c8y/client';
-import { AppStateService, HumanizeAppNamePipe } from '@c8y/ngx-components';
+import { AppStateService, C8Y_PLUGIN_CONTEXT_PATH, HumanizeAppNamePipe } from '@c8y/ngx-components';
 import {
   combineLatest,
   distinctUntilChanged,
@@ -17,14 +17,13 @@ import { ApiDocApp } from './api-doc-app.model';
 import { sortBy } from 'lodash';
 import { gettext } from '@c8y/ngx-components/gettext';
 
-@Injectable({
-  providedIn: 'root'
-})
+@Injectable()
 export class ApiDocService {
   private appService = inject(ApplicationService);
   private appStateService = inject(AppStateService);
   private humanize = inject(HumanizeAppNamePipe);
   private cache$: Observable<ApiDocApp[]> | null = null;
+  private pluginContextPath = inject(C8Y_PLUGIN_CONTEXT_PATH);
 
   private readonly CORE_API_DOCS_APP: ApiDocApp = {
     id: 'core-api',
@@ -59,16 +58,13 @@ export class ApiDocService {
           )
         )
       );
-      this.cache$ = combineLatest([
-        appsOfCurrentUser$,
-        this.appStateService.currentApplication,
-        this.appStateService.currentTenant
-      ]).pipe(
-        map(([apps, currentApp, currentTenant]) => {
+      this.cache$ = combineLatest([appsOfCurrentUser$, this.appStateService.currentTenant]).pipe(
+        map(([apps, currentTenant]) => {
           // Update coreApiDocApps with current app's contextPath
           const coreApiDoc: ApiDocApp = {
             ...this.CORE_API_DOCS_APP,
-            contextPath: currentApp?.contextPath || 'api-doc'
+            contextPath: this.pluginContextPath,
+            downloadPath: `/apps/${this.pluginContextPath}/c8y-oas.yml`
           };
 
           // Filter apps with openApiSpec

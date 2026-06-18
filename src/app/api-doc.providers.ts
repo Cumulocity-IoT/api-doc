@@ -1,7 +1,9 @@
 import { hookNavigator, hookRoute } from '@c8y/ngx-components';
 import { ApiDocNavigatorFactory } from './api-doc-navigator.factory';
+import { ApiDocService } from './api-doc.service';
 
 export const apiDocProviders = [
+  ApiDocService,
   hookRoute([
     {
       path: 'api-docs',
