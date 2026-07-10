@@ -9,25 +9,14 @@
     type="button"
     (click)="downloadSpecFile()"
   >
-    <i
-      class="m-r-4"
-      [c8yIcon]="'download'"
-    ></i>
+    <i class="m-r-4" [c8yIcon]="'download'"></i>
     <span translate>Download</span>
   </button>
 </c8y-action-bar-item>
 @if (!(shouldHideAlert$ | async)) {
   <div class="d-flex j-c-center m-t-16 m-b-16">
-    <div
-      class="alert alert-warning"
-      role="alert"
-    >
-      <button
-        class="close"
-        aria-label="Close alert"
-        type="button"
-        (click)="hideAlert()"
-      >
+    <div class="alert alert-warning" role="alert">
+      <button class="close" aria-label="Close alert" type="button" (click)="hideAlert()">
         <span aria-hidden="true">
           <i [c8yIcon]="'times'"></i>
         </span>
@@ -48,7 +37,4 @@
   </div>
 }
 
-<div
-  id="api-documentation"
-  #apiDocElement
-></div>
+<div id="api-documentation" #apiDocElement></div>

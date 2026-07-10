@@ -10,7 +10,7 @@ import {
   ListItemComponent,
   ListItemFooterComponent,
   ListItemIconComponent,
-  TitleComponent
+  TitleComponent,
 } from '@c8y/ngx-components';
 import { ApiDocService } from '../api-doc.service';
 
@@ -29,8 +29,8 @@ import { ApiDocService } from '../api-doc.service';
     RouterLink,
     C8yTranslateDirective,
     C8yTranslatePipe,
-    AppIconComponent
-  ]
+    AppIconComponent,
+  ],
 })
 export class ApiDocHomeComponent {
   private apiDocService = inject(ApiDocService);

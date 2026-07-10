@@ -8,13 +8,13 @@ export const apiDocProviders = [
     {
       path: 'api-docs',
       loadComponent: () =>
-        import('./api-doc-home/api-doc-home.component').then(m => m.ApiDocHomeComponent)
+        import('./api-doc-home/api-doc-home.component').then((m) => m.ApiDocHomeComponent),
     },
     {
       path: 'api-docs/:id',
 
-      loadComponent: () => import('./swagger/swagger.component').then(m => m.SwaggerComponent)
-    }
+      loadComponent: () => import('./swagger/swagger.component').then((m) => m.SwaggerComponent),
+    },
   ]),
-  hookNavigator(ApiDocNavigatorFactory)
+  hookNavigator(ApiDocNavigatorFactory),
 ];

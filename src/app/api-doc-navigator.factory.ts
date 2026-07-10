@@ -7,14 +7,14 @@ import { gettext } from '@c8y/ngx-components/gettext';
 import { createAppIconComponent } from './app-icon/app-icon-navigator.component';
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class ApiDocNavigatorFactory implements ExtensionFactory<NavigatorNode> {
   private apiDocService = inject(ApiDocService);
 
   get(): Observable<NavigatorNode> {
     return this.apiDocService.getApiDocApps().pipe(
-      map(apps => {
+      map((apps) => {
         return new NavigatorNode({
           path: 'api-docs',
           icon: 'api',
@@ -26,11 +26,11 @@ export class ApiDocNavigatorFactory implements ExtensionFactory<NavigatorNode> {
                 label: app.appLabel,
                 iconComponent: createAppIconComponent(app),
                 path: `/api-docs/${app.id}`,
-                priority: index * -1
-              })
-          )
+                priority: index * -1,
+              }),
+          ),
         });
-      })
+      }),
     );
   }
 }

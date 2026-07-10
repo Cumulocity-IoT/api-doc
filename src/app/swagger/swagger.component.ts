@@ -6,7 +6,7 @@ import {
   inject,
   OnDestroy,
   ViewChild,
-  ViewEncapsulation
+  ViewEncapsulation,
 } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { FetchClient } from '@c8y/client';
@@ -15,7 +15,7 @@ import {
   C8yTranslatePipe,
   IconDirective,
   TitleComponent,
-  UserPreferencesService
+  UserPreferencesService,
 } from '@c8y/ngx-components';
 import { firstValueFrom, map, shareReplay, Subject, switchMap, takeUntil } from 'rxjs';
 import SwaggerUI from 'swagger-ui-dist/swagger-ui-es-bundle';
@@ -24,9 +24,9 @@ import { ApiDocService } from '../api-doc.service';
 @Component({
   selector: 'api-swagger',
   templateUrl: './swagger.component.html',
-  styleUrls: ['./swagger.component.less'],
+  styleUrls: ['./swagger.component.scss'],
   encapsulation: ViewEncapsulation.None,
-  imports: [IconDirective, ActionBarItemComponent, C8yTranslatePipe, TitleComponent, AsyncPipe]
+  imports: [IconDirective, ActionBarItemComponent, C8yTranslatePipe, TitleComponent, AsyncPipe],
 })
 export class SwaggerComponent implements OnDestroy, AfterViewInit {
   @ViewChild('apiDocElement', { static: true }) apiDocElement: ElementRef | undefined;
@@ -38,17 +38,17 @@ export class SwaggerComponent implements OnDestroy, AfterViewInit {
 
   shouldHideAlert$ = this.userPreferences.observe<boolean>('apiDocHideAuthAlert');
   spec$ = this.activatedRoute.paramMap.pipe(
-    map(params => params.get('id')),
-    switchMap(id => this.apiDocService.getApiDocById(id)),
-    switchMap(app => {
+    map((params) => params.get('id')),
+    switchMap((id) => this.apiDocService.getApiDocById(id)),
+    switchMap((app) => {
       const specPath = app.downloadPath;
       const isYaml = specPath.endsWith('.yaml') || specPath.endsWith('.yml');
       return this.fetchClient
         .fetch(app.downloadPath)
-        .then(response => (isYaml ? response.text() : response.json()))
-        .then(data => ({ app, data, isYaml }));
+        .then((response) => (isYaml ? response.text() : response.json()))
+        .then((data) => ({ app, data, isYaml }));
     }),
-    shareReplay(1)
+    shareReplay(1),
   );
 
   hideAlert() {
@@ -82,7 +82,7 @@ export class SwaggerComponent implements OnDestroy, AfterViewInit {
           const fetchOptions = this.fetchClient.getFetchOptions();
           Object.assign(req.headers, fetchOptions?.headers || {});
           return req;
-        }
+        },
       });
     });
   }

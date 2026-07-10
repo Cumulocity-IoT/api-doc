@@ -15,15 +15,15 @@ export default {
     license,
     package: 'blueprint',
     icon: {
-      class: 'rest-api'
+      class: 'rest-api',
     },
     remotes: {
-      [appName]: ['apiDocProviders']
+      [appName]: ['apiDocProviders'],
     },
     blueprintDeploymentOptions: {
       name: gettext('API documentation'),
       contextPath: 'api_doc',
-      key: 'api_doc-application-key'
+      key: 'api_doc-application-key',
     },
     label: 'OFFICIAL',
     availability: 'SHARED',
@@ -32,9 +32,9 @@ export default {
         name: gettext('API documentation'),
         module: 'apiDocProviders',
         path: './src/app/api-doc.providers',
-        description: gettext('A tool to view API documentation of installed applications.')
-      }
-    ]
+        description: gettext('A tool to view API documentation of installed applications.'),
+      },
+    ],
   },
   buildTime: {
     skipMonacoLanguageSupport: true,
@@ -52,7 +52,7 @@ export default {
       '@c8y/ngx-components',
       'ngx-bootstrap',
       '@ngx-translate/core',
-      '@ngx-formly/core'
-    ]
-  }
+      '@ngx-formly/core',
+    ],
+  },
 } as const satisfies ConfigurationOptions;

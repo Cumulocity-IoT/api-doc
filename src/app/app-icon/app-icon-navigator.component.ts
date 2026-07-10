@@ -5,9 +5,9 @@ export function createAppIconComponent(app: any) {
   @Component({
     selector: 'api-app-icon-navigator',
     templateUrl: './app-icon-navigator.component.html',
-    styleUrls: ['./app-icon-navigator.component.less'],
+    styleUrls: ['./app-icon-navigator.component.scss'],
     standalone: true,
-    imports: [AppIconComponent]
+    imports: [AppIconComponent],
   })
   class AppIconNavigatorComponent {
     app = app;

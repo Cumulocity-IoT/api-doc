@@ -11,7 +11,7 @@ import {
   of,
   shareReplay,
   switchMap,
-  take
+  take,
 } from 'rxjs';
 import { ApiDocApp } from './api-doc-app.model';
 import { sortBy } from 'lodash';
@@ -32,12 +32,12 @@ export class ApiDocService {
     contextPath: 'api-doc',
     downloadPath: './c8y-oas.yml',
     icon: {
-      class: 'c8y-icon-cumulocity-iot'
+      class: 'c8y-icon-cumulocity-iot',
     },
     manifest: {
-      openApiSpec: 'c8y-oas.yml'
+      openApiSpec: 'c8y-oas.yml',
     },
-    appLabel: gettext('Core API')
+    appLabel: gettext('Core API'),
   };
 
   /**
@@ -47,16 +47,16 @@ export class ApiDocService {
   getApiDocApps(): Observable<ApiDocApp[]> {
     if (!this.cache$) {
       const appsOfCurrentUser$ = this.appStateService.currentUser.pipe(
-        map(user => user?.id),
+        map((user) => user?.id),
         distinctUntilChanged(),
-        filter(userId => !!userId),
-        switchMap(userId =>
+        filter((userId) => !!userId),
+        switchMap((userId) =>
           from(
             this.appService.listByUser(userId, {
-              pageSize: 2000
-            })
-          )
-        )
+              pageSize: 2000,
+            }),
+          ),
+        ),
       );
       this.cache$ = combineLatest([appsOfCurrentUser$, this.appStateService.currentTenant]).pipe(
         map(([apps, currentTenant]) => {
@@ -64,17 +64,20 @@ export class ApiDocService {
           const coreApiDoc: ApiDocApp = {
             ...this.CORE_API_DOCS_APP,
             contextPath: this.pluginContextPath,
-            downloadPath: `/apps/${this.pluginContextPath}/c8y-oas.yml`
+            downloadPath: `/apps/${this.pluginContextPath}/c8y-oas.yml`,
           };
 
           // Filter apps with openApiSpec
           const appsWithOpenApiSpec = apps.data.filter(
-            app => !!(app.manifest && app.manifest['openApiSpec'])
+            (app) => !!(app.manifest && app.manifest['openApiSpec']),
           );
           return {
-            appsWithOpenApiSpec: sortBy(appsWithOpenApiSpec, app => app.name?.toLowerCase() || ''),
+            appsWithOpenApiSpec: sortBy(
+              appsWithOpenApiSpec,
+              (app) => app.name?.toLowerCase() || '',
+            ),
             coreApiDoc,
-            currentTenant
+            currentTenant,
           };
         }),
         switchMap(({ appsWithOpenApiSpec, coreApiDoc, currentTenant }) => {
@@ -88,7 +91,7 @@ export class ApiDocService {
             }
 
             const isSubscribedApp = currentTenant?.applications?.references?.some(
-              ref => ref.application.id === app.id
+              (ref) => ref.application.id === app.id,
             );
             if (!isSubscribedApp) {
               continue;
@@ -105,22 +108,24 @@ export class ApiDocService {
               ...entriesForApp.map((entry, index) =>
                 this.humanize.transform(entry.label).pipe(
                   map(
-                    humanizedName =>
+                    (humanizedName) =>
                       ({
                         ...app,
                         id: `${app.id}-${index}`,
                         appLabel: humanizedName,
-                        downloadPath: `/service/${app.contextPath}/${entry.path}`
-                      }) as ApiDocApp
-                  )
-                )
-              )
+                        downloadPath: `/service/${app.contextPath}/${entry.path}`,
+                      }) as ApiDocApp,
+                  ),
+                ),
+              ),
             );
           }
 
-          return combineLatest(appObservables).pipe(map(apiDocApps => [coreApiDoc, ...apiDocApps]));
+          return combineLatest(appObservables).pipe(
+            map((apiDocApps) => [coreApiDoc, ...apiDocApps]),
+          );
         }),
-        shareReplay(1)
+        shareReplay(1),
       );
     }
     return this.cache$;
@@ -133,7 +138,7 @@ export class ApiDocService {
   getApiDocById(id: string | number): Observable<ApiDocApp | undefined> {
     return this.getApiDocApps().pipe(
       take(1),
-      map(apps => apps.find(app => app.id === id?.toString()))
+      map((apps) => apps.find((app) => app.id === id?.toString())),
     );
   }
 

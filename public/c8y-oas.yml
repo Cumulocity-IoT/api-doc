@@ -7088,7 +7088,7 @@ paths:
               activity: Operation created
               source:
                 id: '251982'
-              text: 'Operation created: status=''PENDING'''
+              text: "Operation created: status='PENDING'"
               time: '2020-03-19T12:03:27.845Z'
               type: Operation
               user: rina
@@ -16812,7 +16812,7 @@ paths:
                 apis:
                   - measurements
                   - events
-                typeFilter: '''c8y_Speed'' or ''c8y_LocationUpdate'''
+                typeFilter: "'c8y_Speed' or 'c8y_LocationUpdate'"
               fragmentsToCopy:
                 - c8y_MaxSpeedMeasurement
                 - c8y_Position
@@ -19329,7 +19329,7 @@ paths:
                 $ref: '#/components/schemas/error'
               example:
                 error: tenants/Bad Request
-                message: 'Wrong Proof Of Possession plaintext used for tenant <''t012''>. Certificate <''df9c19e0433c6861bac899078b76fe56a3e7dd14''>, usage not granted.'
+                message: "Wrong Proof Of Possession plaintext used for tenant <'t012'>. Certificate <'df9c19e0433c6861bac899078b76fe56a3e7dd14'>, usage not granted."
                 info: 'https://www.cumulocity.com/guides/reference-guide/#error_reporting'
         '401':
           $ref: '#/components/responses/unauthorizedError'
@@ -22470,7 +22470,7 @@ paths:
 
         > **⚠️ Important:** CSR must be a valid `PKCS#10` with deviceID as Common Name (CN).
 
-        > **&#9432; Info:** CSR request with `CA:TRUE` constraint is not supported. 
+        > **&#9432; Info:** CSR request with `CA:TRUE` constraint is not supported.
       x-code-samples:
         - lang: cURL
           source: |
@@ -22571,7 +22571,7 @@ paths:
 
           > **⚠️ Important:** CSR must be a valid `PKCS#10` with deviceID as Common Name (CN).
 
-          > **&#9432; Info:** CSR request with `CA:TRUE` constraint is not supported. 
+          > **&#9432; Info:** CSR request with `CA:TRUE` constraint is not supported.
       x-code-samples:
         $ref: '#/paths/~1.well-known~1est~1simpleenroll/post/x-code-samples'
       requestBody:
@@ -22990,7 +22990,7 @@ components:
     loginOptionTypeOrId:
       name: typeOrId
       in: path
-      description: 'The type or ID of the login option. The type''s value is case insensitive and can be `OAUTH2`, `OAUTH2_INTERNAL` or `BASIC`.'
+      description: "The type or ID of the login option. The type's value is case insensitive and can be `OAUTH2`, `OAUTH2_INTERNAL` or `BASIC`."
       required: true
       schema:
         type: string
@@ -23045,7 +23045,7 @@ components:
     queryParam_skipChildrenNames:
       name: skipChildrenNames
       in: query
-      description: 'When set to `true`, the returned references of child devices won''t contain their names.'
+      description: "When set to `true`, the returned references of child devices won't contain their names."
       schema:
         type: boolean
         default: false
@@ -23197,7 +23197,7 @@ components:
     queryParam_inventory_onlyRoots:
       name: onlyRoots
       in: query
-      description: 'When set to `true` it returns managed objects which don''t have any parent. If the current user doesn''t have access to the parent, this is also root for the user.'
+      description: "When set to `true` it returns managed objects which don't have any parent. If the current user doesn't have access to the parent, this is also root for the user."
       schema:
         type: boolean
         default: false
@@ -23805,7 +23805,7 @@ components:
       schema:
         type: string
         minLength: 1
-        example: '''c8y_Speed'' or ''c8y_LocationUpdate'''
+        example: "'c8y_Speed' or 'c8y_LocationUpdate'"
     queryParam_notification_subscription_context_for_delete:
       name: context
       in: query
@@ -24345,7 +24345,7 @@ components:
             $ref: '#/components/schemas/error'
           example:
             error: reliable-notification/Duplicate
-            message: 'Subscription with source <''251982''>, context <''mo''> & subscription <''testSubscription''> already exists!'
+            message: "Subscription with source <'251982'>, context <'mo'> & subscription <'testSubscription'> already exists!"
             info: 'https://www.cumulocity.com/guides/reference-guide/#error_reporting'
     notificationSubscriptionCollectionFound:
       description: The request has succeeded and all subscriptions are sent in the response.
@@ -24409,7 +24409,7 @@ components:
             $ref: '#/components/schemas/error'
           example:
             error: devicecontrol/Not Found
-            message: 'Finding device data from database failed : No operation for gid ''123''!'
+            message: "Finding device data from database failed : No operation for gid '123'!"
             info: 'https://www.cumulocity.com/guides/reference-guide/#error_reporting'
     operationValidationError:
       description: Validation error.
@@ -24577,7 +24577,7 @@ components:
             $ref: '#/components/schemas/error'
           example:
             error: Device Certificates/Bad Request
-            message: 'Unsupported date time format, supported format:yyyy-MM-dd''T''HH:mm:ss.SSS''Z'''
+            message: "Unsupported date time format, supported format:yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
             info: 'https://www.cumulocity.com/guides/reference-guide/#error_reporting'
     tenantApplicationReferenceFound:
       description: The request has succeeded and the tenant applications are sent in the response.
@@ -25086,7 +25086,7 @@ components:
         source:
           id: '251982'
           self: 'https://<TENANT_DOMAIN>/inventory/managedObjects/251982'
-        text: 'Operation created: status=''PENDING'''
+        text: "Operation created: status='PENDING'"
         time: '2020-03-19T00:00:00.000Z'
         type: Operation
         user: rina
@@ -25118,7 +25118,7 @@ components:
             source:
               id: '251982'
               self: 'https://<TENANT_DOMAIN>/inventory/managedObjects/251982'
-            text: 'Operation created: status=''PENDING'''
+            text: "Operation created: status='PENDING'"
             time: '2020-03-19T00:00:00.000Z'
             type: Operation
             user: rina
@@ -25444,7 +25444,7 @@ components:
         contentSecurityPolicy:
           description: The content security policy of the application.
           type: string
-          example: 'base-uri ''none''; default-src ''self'' ''unsafe-inline'' http: https: ws: wss:; connect-src ''self'' *.billwerk.com http: https: ws: wss:;  script-src ''self'' open.mapquestapi.com *.twitter.com *.twimg.com ''unsafe-inline'' ''unsafe-eval'' data:; style-src * ''unsafe-inline'' blob:; img-src * data:; font-src * data:; frame-src *;'
+          example: "base-uri 'none'; default-src 'self' 'unsafe-inline' http: https: ws: wss:; connect-src 'self' *.billwerk.com http: https: ws: wss:;  script-src 'self' open.mapquestapi.com *.twitter.com *.twimg.com 'unsafe-inline' 'unsafe-eval' data:; style-src * 'unsafe-inline' blob:; img-src * data:; font-src * data:; frame-src *;"
         noAppSwitcher:
           description: A flag that decides if the application is shown in the app switcher on the UI.
           type: boolean
@@ -25584,7 +25584,7 @@ components:
               line:
                 description: Line where the failure occurred.
                 type: string
-                example: 'DeviceInfo{id=''id5'', credentials=''credentials3'', tenant=''t00000003''}'
+                example: "DeviceInfo{id='id5', credentials='credentials3', tenant='t00000003'}"
     bulkOperation:
       type: object
       properties:
@@ -25699,7 +25699,7 @@ components:
           description: The user's last name.
           type: string
         lastPasswordChange:
-          description: 'The date and time when the user''s password was last changed, in [ISO 8601 datetime format](https://www.w3.org/TR/NOTE-datetime).'
+          description: "The date and time when the user's password was last changed, in [ISO 8601 datetime format](https://www.w3.org/TR/NOTE-datetime)."
           type: string
           format: date-time
           example: '2020-06-09T09:48:40.008Z'
@@ -26004,7 +26004,7 @@ components:
           description: Current value of the feature toggle marking whether the feature is active or not.
           type: boolean
         strategy:
-          description: 'The source of the feature toggle value - either it''s feature toggle definition provided default, or per tenant provided override.'
+          description: "The source of the feature toggle value - either it's feature toggle definition provided default, or per tenant provided override."
           type: string
           enum:
             - DEFAULT
@@ -26729,7 +26729,7 @@ components:
         enrollmentToken:
           type: string
           description: |
-            When creating [a new device enrollment request](#tag/Device-enrollment) this field is treated as device's one time password (OTP).   
+            When creating [a new device enrollment request](#tag/Device-enrollment) this field is treated as device's one time password (OTP).
       example:
         id: '54545454'
         self: 'https://<TENANT_DOMAIN>/devicecontrol/newDeviceRequests/54545454'
@@ -27106,7 +27106,7 @@ components:
           description: The user's last name.
           type: string
         lastPasswordChange:
-          description: 'The date and time when the user''s password was last changed, in [ISO 8601 datetime format](https://www.w3.org/TR/NOTE-datetime).'
+          description: "The date and time when the user's password was last changed, in [ISO 8601 datetime format](https://www.w3.org/TR/NOTE-datetime)."
           type: string
           format: date-time
           readOnly: true
@@ -27114,7 +27114,7 @@ components:
           description: Indicates whether the user is subscribed to the newsletter or not.
           type: boolean
         owner:
-          description: 'Identifier of the parent user. If present, indicates that a user belongs to a user hierarchy by pointing to its direct ancestor. Can only be set by users with role USER_MANAGEMENT_ADMIN during user creation. Otherwise it''s assigned automatically.'
+          description: "Identifier of the parent user. If present, indicates that a user belongs to a user hierarchy by pointing to its direct ancestor. Can only be set by users with role USER_MANAGEMENT_ADMIN during user creation. Otherwise it's assigned automatically."
           type: string
           readOnly: true
         password:
@@ -27172,7 +27172,7 @@ components:
           default: false
           readOnly: true
         userName:
-          description: 'The user''s username. It cannot contain whitespace, slashes nor any of `+$:` characters.'
+          description: "The user's username. It cannot contain whitespace, slashes nor any of `+$:` characters."
           maxLength: 1000
           minLength: 1
           type: string
@@ -28162,7 +28162,7 @@ components:
         customProperties:
           $ref: '#/components/schemas/customProperties'
         domainName:
-          description: 'URL of the tenant''s domain. The domain name permits only the use of alphanumeric characters separated by dots `.`, hyphens `-` and underscores `_`.'
+          description: "URL of the tenant's domain. The domain name permits only the use of alphanumeric characters separated by dots `.`, hyphens `-` and underscores `_`."
           type: string
           format: hostname
           minLength: 1
@@ -29404,7 +29404,7 @@ components:
         tenantCustomProperties:
           $ref: '#/components/schemas/customProperties'
         tenantDomain:
-          description: 'URL of the tenant''s domain. The domain name permits only the use of alphanumeric characters separated by dots `.`, hyphens `-` and underscores `_`.'
+          description: "URL of the tenant's domain. The domain name permits only the use of alphanumeric characters separated by dots `.`, hyphens `-` and underscores `_`."
           type: string
           format: hostname
           minLength: 1
@@ -29772,7 +29772,7 @@ components:
           type: object
           properties:
             interval:
-              description: 'Period (milliseconds) after which the server will close the session, if it doesn''t received the next connect message from the client. Overrides server default settings for current request-response conversation.'
+              description: "Period (milliseconds) after which the server will close the session, if it doesn't received the next connect message from the client. Overrides server default settings for current request-response conversation."
               type: integer
               minimum: 0
             timeout:
@@ -30025,7 +30025,7 @@ components:
           apis:
             - measurements
             - events
-          typeFilter: '''c8y_Speed'' or ''c8y_LocationUpdate'''
+          typeFilter: "'c8y_Speed' or 'c8y_LocationUpdate'"
         fragmentsToCopy:
           - c8y_MaxSpeedMeasurement
           - c8y_Position
@@ -30061,7 +30061,7 @@ components:
               apis:
                 - measurements
                 - events
-              typeFilter: '''c8y_Speed'' or ''c8y_LocationUpdate'''
+              typeFilter: "'c8y_Speed' or 'c8y_LocationUpdate'"
             fragmentsToCopy:
               - c8y_MaxSpeedMeasurement
               - c8y_Position
@@ -30423,7 +30423,7 @@ components:
           description: The hardware serial number of the device.
           example: 00000000e2f5ad4d
     c8y_Firmware:
-      description: 'Contains information on a device''s firmware. In the inventory, `c8y_Firmware` represents the currently installed firmware on the device. As part of an operation, `c8y_Firmware` requests the device to install the indicated firmware. To enable firmware installation through the user interface, add `c8y_Firmware` to the list of supported operations.'
+      description: "Contains information on a device's firmware. In the inventory, `c8y_Firmware` represents the currently installed firmware on the device. As part of an operation, `c8y_Firmware` requests the device to install the indicated firmware. To enable firmware installation through the user interface, add `c8y_Firmware` to the list of supported operations."
       type: object
       properties:
         name:
