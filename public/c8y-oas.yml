@@ -50,8 +50,8 @@ info:
     |---|---|
     |PERSISTENT (default)|Stores data in the Cumulocity database and sends data to the Streaming Analytics engine. Afterwards, Cumulocity returns the result of the request. This is the default mode.|
     |TRANSIENT|Sends data to the Streaming Analytics engine and immediately returns the results asynchronously but does not store data in Cumulocity’s database. This mode saves storage and processing costs and is useful for example when tracking devices in real time without requiring data to be stored.|
-    |QUIESCENT|Behaves similar to the persistent mode with the exception that no real-time notifications will be sent. The quiescent processing mode is applicable only for measurements and events.|
-    |CEP| Behaves like the transient mode with the exception that no real-time notifications are sent. Currently it is applicable only for measurements and events.|
+    |QUIESCENT|Behaves similar to the persistent mode with the exception that no real-time notifications will be sent.|
+    |CEP|Behaves like the transient mode with the exception that no real-time notifications are sent.|
 
     To explicitly control the processing mode of an update request, you can use the "X-Cumulocity-Processing-Mode" header with a value of either "PERSISTENT", "TRANSIENT", "QUIESCENT" or "CEP":
 
@@ -64,6 +64,8 @@ info:
     ### Authorization
 
     All requests issued to Cumulocity are subject to authorization. To determine the required permissions, see the "Required role" entries for the individual requests. To learn more about the different permissions and the concept of ownership in Cumulocity, see [Getting started > Technical concepts > Security aspects > Access control > Managing roles and assigning permissions](https://www.cumulocity.com/docs/concepts/security/#managing-roles-and-assigning-permissions) in the Cumulocity user documentation.
+
+    > **⚠️ Important:** In the Cumulocity API, each granular permission is identified by a unique “permission” string, which is prefixed with ROLE_ (for example, ROLE_ALARM_READ, ROLE_INVENTORY_ADMIN). Therefore, permissions are frequently referred to as “roles” throughout the API as well as in the configuration files. For example, the microservice manifest includes a requiredRoles field, which actually expects a permission string. See also the [Glossary](https://www.cumulocity.com/docs/glossary) of the Cumulocity user documentation for the usage of the terms “permission” and “role” in the Cumulocity context.
 
     ### Media types
 
@@ -280,7 +282,12 @@ info:
     You can check your login options with a GET call to the endpoint <kbd><a href="#tag/Login-options">/tenant/loginOptions</a></kbd>.
 servers:
   - description: Cumulocity tenant
-    url: '/'
+    url: 'https://<TENANT_DOMAIN>'
+security:
+  - Basic: []
+  - OAI-Secure: []
+  - SSO: []
+  - JWT-IAM: []
 tags:
   - name: Alarm API
     description: 'The alarm API resource returns URIs and URI templates to collections of alarms, so that all alarms or alarms of a specified source device and/or status can be retrieved.'
@@ -418,8 +425,10 @@ tags:
       > **&#9432; Info:** The Accept header should be provided in all POST/PUT requests, otherwise an empty response body will be returned.
   - name: Bulk operations
     description: |
-      The bulk operations API allows to schedule an operation on a group of devices to be executed at a specified time.
+      The bulk operations API allows you to schedule an operation on a group of devices.
       It is required to specify the delay between the creation of subsequent operations.
+
+      Bulk operations are an asynchronous, best-effort mechanism to distribute an operation to a group of devices. They are not a precision scheduling tool. The platform starts creating the individual operations at the configured start date, but the exact creation and delivery times of the individual operations can vary. If devices must execute an operation at a precise time, deliver the operation to the devices ahead of time and include the desired execution time in the operation payload. The devices then trigger the execution locally at the specified time.
       When the bulk operation is created, it has the status ACTIVE.
       When all operations are created, the bulk operation has the status COMPLETED.
       It is also possible to cancel an already created bulk operation by deleting it.
@@ -1177,7 +1186,7 @@ tags:
       The forwarded alarms include those raised by Cumulocity itself, and those published via REST or MQTT from other components in, or attached to,
       the platform, including any alarms raised by the depicted devices.
 
-      ![Notification 2.0 topics and subscriptions diagram](https://cumulocity.com/api/core/images/notification2-subscriptions.svg)
+      ![Notification 2.0 topics and subscriptions diagram](images/notification2-subscriptions.svg)
 
       ## Notification 2.0 Service Quotas
 
@@ -1191,10 +1200,10 @@ tags:
 
       ### Message backlog quota
 
-      Persistent messages are stored in a subscription “backlog” until they are delivered to the destination consumer attached to that subscription.
+      Persistent messages are stored in a “backlog” until they are delivered to a destination consumer client attached to each consumer on a topic.
       The maximum size of a backlog is determined by the “backlog quota” limit, which directly affects the number of messages that can be stored and therefore the resource consumption of the platform.
 
-      For Notifications 2.0, a separate backlog exists for every unique subscription name - that is, for every distinct topic - used with the `/notification2/subscriptions` API. This backlog is shared by all subscriptions using the same topic, and by all consumers attached to each topic. If the quota limit is reached, no new messages can be added to the backlog until some older messages have been delivered, or deleted due to their TTL expiring.
+      For Notifications 2.0, a separate backlog exists for every subscription name - that is, for every distinct topic - used with the `/notification2/subscriptions` API. This backlog is shared by all consumers using the same topic, and by all consumer clients attached to each topic. If the quota limit is reached, no new messages can be added to the backlog until some older messages have been delivered, or deleted due to their TTL expiring.
 
       If the backlog for a Notifications 2.0 topic has reached its quota limit, any API request to the {{< product-c8y-iot >}} platform that would be published onto that topic will receive HTTP response code 500.
       For example, a POST request to the `/measurement/measurements` API endpoint will return the 500 response code if there is a topic that should receive that message, but cannot do so because its backlog is full.
@@ -1233,8 +1242,14 @@ tags:
       In typical usage, multiple consumers of a given topic operate independently in parallel, each receiving and acknowledging
       separate copies of those messages.
 
-      > **⚠️ Important:** It is important to manage consumers carefully as they can place significant storage resource demands on a system.
-      > Only create (connect) consumers if they are to be active, and unsubscribe them if they are no longer needed or not needed for long periods.
+      > **⚠️ Important:** In this documentation, a _consumer_ is a persistent registration of interest in the messages on a topic.
+      > A _consumer client_ is a message receiver, connected to a consumer, that can read and acknowledge the messages for that consumer.
+      > When a consumer is created, the Messaging Service will retain messages on the backlog for the relevant topic, up to the limit of the backlog quota.
+      > A consumer is created implicitly when the first consumer client is connected to it, but it must be explicitly deleted when no longer required.
+      > Consumer clients may be connected or disconnected at any time without affecting message retention for the consumer.
+      >
+      > It is important to manage consumers carefully as they can place significant storage resource demands on a system.
+      > Only create consumers if the messages will be consumed, and unsubscribe them if they are no longer needed or not needed for long periods.
       > Unsubscribing is an explicit action - disconnecting a consumer client does not unsubscribe it.
       > See the [Consumer lifecycle](#section/Overview/Consumer-lifecycle) section for more details.
 
@@ -1250,7 +1265,7 @@ tags:
       of the messages in the "temperature" topic.
       Collectively, they receive all of the messages in the topic.
 
-      ![Notification 2.0 consumers and consumer clients diagram](https://cumulocity.com/api/core/images/notification2-consumers.svg)
+      ![Notification 2.0 consumers and consumer clients diagram](images/notification2-consumers.svg)
 
       ## Consumer lifecycle
 
@@ -1276,7 +1291,7 @@ tags:
       The consumer's backlog is maintained, even if its client connection is interrupted. This is needed for reliable messaging,
       allowing the consumer to not miss messages during connection outages, but comes at the cost of explicit lifecycle management.
 
-      ![Notification 2.0 consumer backlog lifecycle](https://cumulocity.com/api/core/images/notifications2-backlog-lifecycle.svg)
+      ![Notification 2.0 consumer backlog lifecycle](images/notifications2-backlog-lifecycle.svg)
 
       To unsubscribe its consumer, pass its token as the **token** parameter to the [/notification2/unsubscribe](#operation/postNotificationTokenUnsubscribeResource) REST endpoint.
 
@@ -1527,6 +1542,10 @@ tags:
       it to be recognized across connection interruptions, so allowing message delivery to be resumed after such interruptions
       and thus be reliable.
 
+      > **⚠️ Important:** As noted in [topics and subscriptions](#section/Overview/Topics-and-subscriptions) the terms 'subscription' and 'subscriber' are overloaded and can cause confusion.
+      > When using the token API, the 'subscriber' field refers to the _consumer_, a named, persistent registration of interest in the messages on a topic.
+      > See [consumers and tokens](#section/Overview/Consumers-and-tokens) for more details.
+
       The **shared** field determines if multiple clients can connect in parallel as the consumer identified in the
       **subscriber** field, acting collectively to share the notification message processing load.
 
@@ -1631,13 +1650,22 @@ tags:
       To keep the messages from a given set of source **id**s 'sticky' to a specific consumer client in the share in the face of connection interruptions,
       the consumer clients can provide an optional `consumer` parameter in their connection URL string, in addition to their usual `token` parameter.
 
-      For example: two consumers identifying themselves as *instance1* and *instance2* connect using URL paths
+      For example: two consumer clients identifying themselves as *instance1* and *instance2* connect using URL paths
       `notification2/consumer?token=xyz&consumer=instance1` and `notification2/consumer?token=xyz&consumer=instance2`.
 
       Subscriptions are always unaware of the nature and number of their consumers: any number of shared and exclusive tokens
       can be created for the same subscription topic and they all operate independently,
       each receiving their own copy of the notifications.
       This means you can have multiple shared tokens for the same subscription topic and their load is only divided within the scope of each shared token.
+
+      > **&#9432; Info:** Please note the following points to avoid unexpected behaviour when using shared consumer tokens:
+      > * The `consumer` parameter to the `notification2/consumer` API endpoint provides a name for the _consumer client_, **not** the _consumer_.
+      >   The consumer name is encoded within the token string and does not have to be explicitly provided again.
+      > * Multiple consumers on a topic operate independently, with each receiving their own copy of the notifications.
+      >   With shared consumers, this means that the distribution of notifications across consumer clients may be done differently for each consumer.
+      > * Messages received by a shared consumer client **must** be acknowledged on the same WebSocket connection.
+      >   Attempting to acknowledge a message received by one consumer client on the connection used by a different client will not work.
+      >   The message will not be acknowledged and will remain on the backlog, potentially causing the topic backlog quota limit to be reached.
 
       ## Building consuming applications and microservices
 
@@ -2951,6 +2979,119 @@ paths:
           $ref: '#/components/responses/operationNotAuthorized'
         '404':
           $ref: '#/components/responses/alarmNotFound'
+        '422':
+          $ref: '#/components/responses/invalidPayload'
+  /alarm/alarms/upsert:
+    post:
+      operationId: postAlarmUpsertResource
+      x-codegen-resource-name: upsertAlarm
+      parameters:
+        - $ref: '#/components/parameters/acceptHeader'
+        - $ref: '#/components/parameters/processingModeHeader'
+        - $ref: '#/components/parameters/queryParam_alarm_incrementCount'
+      tags:
+        - Alarms
+      security:
+        - Basic: []
+        - OAI-Secure: []
+        - SSO: []
+        - JWT-IAM: []
+      summary: Create or update an alarm
+      description: |
+        Upserts an alarm based on the provided representation. If a non-cleared alarm with the same type and source already exists, it is updated; otherwise, a new alarm is created.
+
+        <section><h5>Required roles</h5>
+        ROLE_ALARM_ADMIN <b>OR</b> owner of the source <b>OR</b> ALARM_ADMIN permission on the source
+        </section>
+      requestBody:
+        required: true
+        content:
+          application/vnd.com.nsn.cumulocity.alarm+json:
+            example:
+              source:
+                id: '251982'
+              type: c8y_UnavailabilityAlarm
+              text: No data received from the device within the required interval.
+              severity: MAJOR
+              status: ACTIVE
+              time: '2020-03-19T12:03:27.845Z'
+            schema:
+              $ref: '#/components/schemas/alarmUpsert'
+      x-code-samples:
+        - lang: cURL
+          source: |
+            curl --location --request POST "https://<TENANT_DOMAIN>/alarm/alarms/upsert" \
+            --header "Authorization: Basic <AUTHORIZATION>" \
+            --header "Accept: application/json" \
+            --header "Content-Type: application/json" \
+            --data-raw '<Payload>'
+        - lang: C#
+          source: |
+            var client = new RestClient("https://<TENANT_DOMAIN>/alarm/alarms/upsert");
+            client.Timeout = -1;
+
+            var request = new RestRequest(Method.POST);
+            request.AddHeader("Authorization", "Basic <AUTHORIZATION>");
+            request.AddHeader("Content-Type", "application/json");
+            request.AddHeader("Accept", "application/json");
+            request.AddParameter("application/json", "<Payload>",  ParameterType.RequestBody);
+
+            IRestResponse response = client.Execute(request);
+            Console.WriteLine(response.Content);
+        - lang: Java
+          source: |
+            Unirest.setTimeouts(0, 0);
+            HttpResponse<String> response = Unirest.post("https://<TENANT_DOMAIN>/alarm/alarms/upsert")
+                .header("Authorization", "Basic <AUTHORIZATION>")
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .body("<Payload>")
+                .asString();
+            System.out.println(response);
+        - lang: Node.js
+          source: |
+            var unirest = require("unirest");
+            var req = unirest("POST", "https://<TENANT_DOMAIN>/alarm/alarms/upsert")
+                .headers({
+                    "Authorization": "Basic <AUTHORIZATION>",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                })
+                .send(JSON.stringify( <Payload> ))
+                .end(function (res) {
+                    if (res.error) throw new Error(res.error);
+                    console.log(res.raw_body);
+                });
+        - lang: Python
+          source: |
+            import requests
+            import json
+
+            url = "https://<TENANT_DOMAIN>/alarm/alarms/upsert"
+            headers = {
+              "Authorization": "Basic <AUTHORIZATION>",
+              "Accept": "application/json",
+              "Content-Type": "application/json"
+            }
+            response = requests.request("POST", url, headers=headers, data = json.dumps(<Payload>))
+            print(response.text.encode("utf8"))
+      responses:
+        '200':
+          description: An existing alarm was updated.
+          content:
+            application/vnd.com.nsn.cumulocity.alarmUpsertResponse+json:
+              schema:
+                $ref: '#/components/schemas/alarmUpsertResponse'
+        '201':
+          description: An alarm was created.
+          content:
+            application/vnd.com.nsn.cumulocity.alarmUpsertResponse+json:
+              schema:
+                $ref: '#/components/schemas/alarmUpsertResponse'
+        '401':
+          $ref: '#/components/responses/unauthorizedError'
+        '403':
+          $ref: '#/components/responses/operationNotAuthorized'
         '422':
           $ref: '#/components/responses/invalidPayload'
   /alarm/alarms/count:
@@ -4954,7 +5095,7 @@ paths:
                     - key
                     - name
                     - type
-                - $ref: '#/components/schemas/application'
+                - $ref: '#/components/schemas/application_no_microservice_manifest'
       responses:
         '201':
           description: An application was created.
@@ -5216,7 +5357,7 @@ paths:
               availability: PRIVATE
             schema:
               allOf:
-                - $ref: '#/components/schemas/application'
+                - $ref: '#/components/schemas/application_no_microservice_manifest'
                 - properties:
                     type:
                       readOnly: true
@@ -5308,6 +5449,8 @@ paths:
           $ref: '#/components/responses/operationNotAuthorized'
         '404':
           $ref: '#/components/responses/applicationNotFound'
+        '422':
+          $ref: '#/components/responses/applicationSubscribedByTenants'
   '/application/applications/{id}/binaries':
     parameters:
       - $ref: '#/components/parameters/applicationId'
@@ -5316,6 +5459,7 @@ paths:
       x-codegen-resource-name: uploadApplicationAttachment
       parameters:
         - $ref: '#/components/parameters/acceptHeader'
+        - $ref: '#/components/parameters/queryParam_application_clearConflictingOptions'
       tags:
         - Application binaries
       security:
@@ -9337,7 +9481,7 @@ paths:
         - Basic: []
         - OAI-Secure: []
         - SSO: []
-      summary: Create a managed object
+      summary: Create one or multiple managed objects
       description: |
         Create a managed object, for example, a device with temperature measurements support or a binary switch.<br>
         In general, each managed object may consist of:
@@ -9353,6 +9497,13 @@ paths:
 
         > **&#9432; Info:** For more details about fragments with specific meanings, refer to [Device management & connectivity > Device integration > Fragment library](https://www.cumulocity.com/docs/device-integration/fragment-library/) in the Cumulocity user documentation.
 
+        The maximum number of managed objects that can be created in a single bulk request is 50.
+        If any managed object included in the bulk request fails validation, then the request fails with a client error and nothing from the bulk request gets created.
+        If an unexpected server error occurs during bulk processing, then the response will return a server error, but part of the bulk that was processed before the error occurred will be created and the remainder will not.
+
+        External identifiers can be assigned to managed objects upon creation by specifying a list in `externalIds` field.
+        Given external identifiers must be valid and not be already assigned to another managed object or the request to create a single or multiple managed objects will fail with a client error and not create anything.
+
         <section><h5>Required roles</h5>
         ROLE_INVENTORY_ADMIN <b>OR</b> ROLE_INVENTORY_CREATE <b>OR</b> ROLE_MANAGED_OBJECT_ADMIN <b>OR</b> ROLE_MANAGED_OBJECT_CREATE
         </section>
@@ -9360,6 +9511,8 @@ paths:
         required: true
         content:
           application/vnd.com.nsn.cumulocity.managedobject+json:
+            schema:
+              $ref: '#/components/schemas/managedObjectCreate'
             example:
               name: My tracking device
               c8y_IsDevice: {}
@@ -9367,13 +9520,17 @@ paths:
                 - deviceSubsetType
               c8y_SupportedOperations:
                 - c8y_Restart
+          application/vnd.com.nsn.cumulocity.managedobjectcollection+json:
             schema:
-              allOf:
-                - $ref: '#/components/schemas/managedObject'
-                - type: object
-                  properties:
-                    owner:
-                      readOnly: true
+              $ref: '#/components/schemas/ManagedObjectCollectionCreate'
+            example:
+              managedObjects:
+                - name: My tracking device
+                  c8y_IsDevice: {}
+                  c8y_DeviceTypes:
+                    - deviceSubsetType
+                  c8y_SupportedOperations:
+                    - c8y_Restart
       x-code-samples:
         - lang: cURL
           source: |
@@ -9439,12 +9596,117 @@ paths:
             application/vnd.com.nsn.cumulocity.managedobject+json:
               schema:
                 $ref: '#/components/schemas/managedObject'
+            application/vnd.com.nsn.cumulocity.managedobjectcollection+json:
+              schema:
+                $ref: '#/components/schemas/ManagedObjectCollection'
         '401':
           $ref: '#/components/responses/unauthorizedError'
         '403':
           $ref: '#/components/responses/operationNotAuthorized'
         '422':
           $ref: '#/components/responses/invalidPayload'
+    put:
+      operationId: putManagedObjectCollectionResource
+      x-codegen-resource-name: updateManagedObjects
+      parameters:
+        - $ref: '#/components/parameters/acceptHeader'
+        - $ref: '#/components/parameters/processingModeHeader'
+      tags:
+        - Managed objects
+      security:
+        - Basic: []
+        - OAI-Secure: []
+        - SSO: []
+      summary: Update multiple managed objects at once
+      description: |
+        Updates multiple managed objects (for example, devices) by their given IDs.
+
+        The maximum number of managed objects that can be updated in a single bulk request is 50.
+
+        <section><h5>Required roles</h5>
+        ROLE_INVENTORY_ADMIN <b>OR</b> ROLE_MANAGED_OBJECT_ADMIN <b>OR</b> owner of the source <b>OR</b> MANAGE_OBJECT_ADMIN permission on the source
+        </section>
+      requestBody:
+        required: true
+        content:
+          application/vnd.com.nsn.cumulocity.managedobjectcollection+json:
+            schema:
+              $ref: '#/components/schemas/ManagedObjectCollectionUpdate'
+            example:
+              managedObjects:
+                - c8y_IsDevice: {}
+                  name: My tracking device
+      x-code-samples:
+        - lang: cURL
+          source: |
+            curl --location --request PUT "https://<TENANT_DOMAIN>/inventory/managedObjects" \
+            --header "Authorization: Basic <AUTHORIZATION>" \
+            --header "Accept: application/json" \
+            --header "Content-Type: application/json" \
+            --data-raw '<Payload>'
+        - lang: C#
+          source: |
+            var client = new RestClient("https://<TENANT_DOMAIN>/inventory/managedObjects");
+            client.Timeout = -1;
+
+            var request = new RestRequest(Method.PUT);
+            request.AddHeader("Authorization", "Basic <AUTHORIZATION>");
+            request.AddHeader("Content-Type", "application/json");
+            request.AddHeader("Accept", "application/json");
+            request.AddParameter("application/json", "<Payload>",  ParameterType.RequestBody);
+
+            IRestResponse response = client.Execute(request);
+            Console.WriteLine(response.Content);
+        - lang: Java
+          source: |
+            Unirest.setTimeouts(0, 0);
+            HttpResponse<String> response = Unirest.put("https://<TENANT_DOMAIN>/inventory/managedObjects")
+                .header("Authorization", "Basic <AUTHORIZATION>")
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .body("<Payload>")
+                .asString();
+            System.out.println(response);
+        - lang: Node.js
+          source: |
+            var unirest = require("unirest");
+            var req = unirest("PUT", "https://<TENANT_DOMAIN>/inventory/managedObjects")
+                .headers({
+                    "Authorization": "Basic <AUTHORIZATION>",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                })
+                .send(JSON.stringify( <Payload> ))
+                .end(function (res) {
+                    if (res.error) throw new Error(res.error);
+                    console.log(res.raw_body);
+                });
+        - lang: Python
+          source: |
+            import requests
+            import json
+
+            url = "https://<TENANT_DOMAIN>/inventory/managedObjects"
+            headers = {
+              "Authorization": "Basic <AUTHORIZATION>",
+              "Accept": "application/json",
+              "Content-Type": "application/json"
+            }
+            response = requests.request("PUT", url, headers=headers, data = json.dumps(<Payload>))
+            print(response.text.encode("utf8"))
+      responses:
+        '200':
+          description: All managed objects were updated.
+          content:
+            application/vnd.com.nsn.cumulocity.managedobjectcollection+json:
+              schema:
+                $ref: '#/components/schemas/ManagedObjectCollection'
+        '401':
+          $ref: '#/components/responses/unauthorizedError'
+        '403':
+          $ref: '#/components/responses/operationNotAuthorized'
+        '404':
+          $ref: '#/components/responses/inventoryObjectNotFound'
     get:
       operationId: getManagedObjectCollectionResource
       x-codegen-resource-name: getManagedObjects
@@ -9782,6 +10044,10 @@ paths:
       responses:
         '204':
           description: A managed object was removed.
+          content:
+            '*/*':
+              schema:
+                type: string
         '401':
           $ref: '#/components/responses/unauthorizedError'
         '403':
@@ -11568,6 +11834,102 @@ paths:
             application/vnd.com.nsn.cumulocity.identityapi+json:
               schema:
                 $ref: '#/components/schemas/identityApiResource'
+        '401':
+          $ref: '#/components/responses/unauthorizedError'
+        '403':
+          $ref: '#/components/responses/operationNotAuthorized'
+  /identity/search:
+    post:
+      operationId: postIdentitySearch
+      tags:
+        - Identity API
+      security:
+        - Basic: []
+        - OAI-Secure: []
+        - SSO: []
+      summary: Lookup global identifiers matching given external identifiers.
+      description: |
+        Given a list of external identifiers, returns their mapping to internal identifiers.
+
+        <section><h5>Required roles</h5>
+        ROLE_IDENTITY_READ
+        </section>
+      x-code-samples:
+        - lang: cURL
+          source: |
+            curl --location --request POST "https://<TENANT_DOMAIN>/identity/search" \
+            --header "Authorization: Basic <AUTHORIZATION>" \
+            --header "Accept: application/json" \
+            --header "Content-Type: application/json" \
+            --data-raw '<Payload>'
+        - lang: C#
+          source: |
+            var client = new RestClient("https://<TENANT_DOMAIN>/identity/search");
+            client.Timeout = -1;
+
+            var request = new RestRequest(Method.POST);
+            request.AddHeader("Authorization", "Basic <AUTHORIZATION>");
+            request.AddHeader("Content-Type", "application/json");
+            request.AddHeader("Accept", "application/json");
+            request.AddParameter("application/json", "<Payload>", ParameterType.RequestBody);
+
+            IRestResponse response = client.Execute(request);
+            Console.WriteLine(response.Content);
+        - lang: Java
+          source: |
+            Unirest.setTimeouts(0, 0);
+            HttpResponse<String> response = Unirest.post("https://<TENANT_DOMAIN>/identity/search")
+                .header("Authorization", "Basic <AUTHORIZATION>")
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .body("<Payload>")
+                .asString();
+        - lang: Node.js
+          source: |
+            var unirest = require("unirest");
+            var req = unirest("POST", "https://<TENANT_DOMAIN>/identity/search")
+                .headers({
+                    "Authorization": "Basic <AUTHORIZATION>",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                })
+                .send(JSON.stringify( <Payload> ))
+                .end(function (res) {
+                    if (res.error) throw new Error(res.error);
+                    console.log(res.raw_body);
+                });
+        - lang: Python
+          source: |
+            import requests
+            import json
+
+            url = "https://<TENANT_DOMAIN>/identity/search"
+            headers = {
+              "Authorization": "Basic <AUTHORIZATION>",
+              "Accept": "application/json",
+              "Content-Type": "application/json"
+            }
+            response = requests.request("POST", url, headers = headers, data = json.dumps(<Payload>))
+            print(response.text.encode("utf8"))
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              externalIds:
+                - externalId: simulator_145074_1
+                  type: c8y_Serial
+            schema:
+              $ref: '#/components/schemas/identitySearchCriteria'
+      responses:
+        '200':
+          description: The request has succeeded and the external ID mappings are returned in the response.
+          content:
+            application/vnd.com.nsn.cumulocity.externalidcollection+json:
+              schema:
+                $ref: '#/components/schemas/externalIds'
+        '400':
+          $ref: '#/components/responses/invalidPayload'
         '401':
           $ref: '#/components/responses/unauthorizedError'
         '403':
@@ -13439,6 +13801,7 @@ paths:
         - $ref: '#/components/parameters/queryParam_users_owner'
         - $ref: '#/components/parameters/queryParam_pageSize'
         - $ref: '#/components/parameters/queryParam_users_username'
+        - $ref: '#/components/parameters/queryParam_users_usernameContains'
         - $ref: '#/components/parameters/queryParam_users_withSubusersCount'
         - $ref: '#/components/parameters/queryParam_withTotalElements'
         - $ref: '#/components/parameters/queryParam_withTotalPages'
@@ -13509,6 +13872,8 @@ paths:
           $ref: '#/components/responses/unauthorizedError'
         '403':
           $ref: '#/components/responses/accessDenied'
+        '422':
+          $ref: '#/components/responses/invalidData'
   '/user/{tenantId}/users/{userId}':
     parameters:
       - $ref: '#/components/parameters/tenantId'
@@ -13685,7 +14050,7 @@ paths:
                       format: password
                       type: string
                       description: |
-                        The user's password. Only latin1 characters are allowed.
+                        The user's password. Allowed characters are: Latin letters (a–z, A–Z), digits (0–9), and the following special characters: ` ~ ! @ # $ % ^ & * ( ) _ | + - = ? ; : ' " , . < > { } [ ] \ /
                         The password can only be updated for the current user.
                     email:
                       type: string
@@ -15913,7 +16278,7 @@ paths:
             }
           ```
 
-        > **⚠️ Important:** Property names used for fragment and series must not contain whitespaces nor the special characters `. , * [ ] ( ) @ $`. This is required to ensure a correct processing and visualization of measurement series on UI graphs.
+        > **⚠️ Important:** Property names used for fragment and series must not contain whitespaces nor the special characters `. , * [ ] ( ) @ $`. This is required to ensure a correct processing.
 
         **Legacy compatibility:**
 
@@ -16457,10 +16822,53 @@ paths:
       description: |
         Retrieve a list of series (all or only those matching the specified names) and their values within a given period of a specific managed object (source).<br>
         A series is any fragment in measurement that contains a `value` property.
+        When querying a series, you can retrieve aggregated data by using the aggregation parameters.  
+        If no aggregation is specified, the response contains a maximum of 5,000 values.
 
-        It is possible to fetch aggregated results using the `aggregationType` parameter. If the aggregation is not specified, the result will contain no more than 5000 values.
+        **Aggregation Options** 
 
-        > **⚠️ Important:** For the aggregation to be done correctly, a device shall always use the same time zone when it sends dates.
+        Aggregation is configured using the `aggregationInterval` parameter, which defines a custom time interval for aggregation.
+
+        **Custom Time Intervals**
+
+        The `aggregationInterval` value must consist of a positive integer from 1–999 range followed by a supported time unit:
+
+        * `s` – seconds
+        * `m` – minutes
+        * `h` – hours
+        * `d` – days
+        * `w` – weeks
+        * `M` – months
+        * `q` – quarters
+        * `y` – years
+
+        ***Examples:*** `300s`, `25m`, `12h`, `7d`, `4w`, `3M`, `2q`, `1y`
+
+        **Aggregation Functions**
+
+        The `aggregationFunction` parameter specifies the functions calculated for each aggregation interval. Supported values:
+
+        * `min`
+        * `max`
+        * `avg`
+        * `sum`
+        * `count`
+        * `stdDevPop`
+        * `stdDevSamp`
+
+        If not specified, the `min` and `max` functions are calculated by default.
+
+        To request multiple functions, repeat the parameter:
+
+        ```markup
+        aggregationFunction=min&aggregationFunction=max&aggregationFunction=avg
+        ```
+
+        The `aggregationFunction` parameter is valid only when aggregation is defined using `aggregationInterval`. Otherwise, the request returns a 400 Bad Request error.
+
+        >**&#9432; Info:** Applies only to timeseries persistence. For legacy persistence, only min and max are always calculated and `aggregationFunction` parameter is ignored.
+
+        > **⚠️ Important:** For correct aggregation, devices must use a consistent time zone when sending timestamps.
 
         <section><h5>Required roles</h5>
         ROLE_MEASUREMENT_READ <b>OR</b> owner of the source <b>OR</b> MEASUREMENT_READ permission on the source
@@ -18221,9 +18629,11 @@ paths:
       description: |
         Subscribe a tenant (by a given ID) to an application.
 
+        > **&#9432; Info:** Subscription requests are not synchronous. A ‘201’ response indicates the request was accepted, but the actual creation of Kubernetes resources may still be in progress. 
+
         <section><h5>Required roles</h5>
         1. the current tenant is application owner and has the role ROLE_APPLICATION_MANAGEMENT_ADMIN <b>OR</b><br>
-        2. for applications that are not microservices, the current tenant is the management tenant or the parent of the application owner tenant, and the user has one of the follwoing roles: ROLE_TENANT_MANAGEMENT_ADMIN, ROLE_TENANT_MANAGEMENT_UPDATE <b>OR</b><br>
+        2. for applications that are not microservices, the current tenant is the management tenant or the parent of the application owner tenant, and the user has one of the following roles: ROLE_TENANT_MANAGEMENT_ADMIN, ROLE_TENANT_MANAGEMENT_UPDATE <b>OR</b><br>
         3. for microservices, the current tenant is the management tenant or the parent of the application owner tenant, and the user has the role ROLE_TENANT_MANAGEMENT_ADMIN OR ROLE_TENANT_MANAGEMENT_UPDATE and one of following conditions is met:<br>
         * the microservice has no manifest<br>
         * the microservice version is supported<br>
@@ -18328,6 +18738,12 @@ paths:
       description: |
         Retrieve the tenant subscribed applications by a given tenant ID.
 
+        > **&#9432; Info:** The result may not reflect the current status of Kubernetes pods. After processing subscription updates 
+        it may take some time until the changes are effective on Kubernetes.
+
+        > **&#9432; Info:** If tenantId is not valid, no error occurs. Instead there will be an empty list of applications returned 
+        as result.
+
         <section><h5>Required roles</h5>
         (ROLE_TENANT_MANAGEMENT_READ <b>OR</b> ROLE_TENANT_ADMIN) <b>AND</b> (the current tenant is its parent <b>OR</b> is the management tenant)
         </section>
@@ -18379,8 +18795,6 @@ paths:
           $ref: '#/components/responses/unauthorizedError'
         '403':
           $ref: '#/components/responses/operationNotAuthorized'
-        '404':
-          $ref: '#/components/responses/tenantNotFound'
   '/tenant/tenants/{tenantId}/applications/{applicationId}':
     parameters:
       - $ref: '#/components/parameters/tenantId'
@@ -18397,6 +18811,8 @@ paths:
       summary: Unsubscribe from an application
       description: |
         Unsubscribe a tenant (by a given tenant ID) from an application (by a given application ID).
+
+        > **&#9432; Info:** Unsubscription requests are not synchronous. A ‘204’ response indicates the request was accepted, but the actual deletion of Kubernetes resources may still be in progress. 
 
         <section><h5>Required roles</h5>
         (ROLE_APPLICATION_MANAGEMENT_ADMIN <b>AND</b> is the application owner <b>AND</b> is the current tenant) <b>OR</b><br>
@@ -18453,6 +18869,337 @@ paths:
           $ref: '#/components/responses/operationNotAuthorized'
         '404':
           $ref: '#/components/responses/tenantNotFound'
+  '/tenant/tenants/{tenantId}/applications/restricted-roles':
+    parameters:
+      - $ref: '#/components/parameters/tenantId'
+    get:
+      operationId: getTenantApplicationRestrictedRolesResource
+      x-codegen-resource-name: getRestrictedRoles
+      tags:
+        - Tenant applications
+      security:
+        - Basic: []
+        - OAI-Secure: []
+        - SSO: []
+      summary: Retrieve the microservice applications restricted roles list
+      description: |
+        Retrieve the list of roles that are restricted from being requested by microservices subscribed to or owned by the tenant.
+
+        <section><h5>Required roles</h5>
+        (ROLE_TENANT_MANAGEMENT_READ <b>OR</b> ROLE_TENANT_ADMIN) <b>AND</b> (the current tenant is its parent <b>OR</b> is the management tenant <b>OR</b> is the current tenant)
+        </section>
+      x-code-samples:
+        - lang: cURL
+          source: |
+            curl --location --request GET "https://<TENANT_DOMAIN>/tenant/tenants/{tenantId}/applications/restricted-roles" \
+            --header "Authorization: Basic <AUTHORIZATION>"
+        - lang: C#
+          source: |
+            var client = new RestClient("https://<TENANT_DOMAIN>/tenant/tenants/{tenantId}/applications/restricted-roles");
+            client.Timeout = -1;
+
+            var request = new RestRequest(Method.GET);
+            request.AddHeader("Authorization", "Basic <AUTHORIZATION>");
+
+            IRestResponse response = client.Execute(request);
+            Console.WriteLine(response.Content);
+        - lang: Java
+          source: |
+            Unirest.setTimeouts(0, 0);
+            HttpResponse<String> response = Unirest.get("https://<TENANT_DOMAIN>/tenant/tenants/{tenantId}/applications/restricted-roles")
+                .header("Authorization", "Basic <AUTHORIZATION>").asString();
+        - lang: Node.js
+          source: |
+            var unirest = require("unirest");
+            var req = unirest("GET", "https://<TENANT_DOMAIN>/tenant/tenants/{tenantId}/applications/restricted-roles")
+                .headers({
+                    "Authorization": "Basic <AUTHORIZATION>"
+                })
+                .end(function (res) {
+                    if (res.error) throw new Error(res.error);
+                    console.log(res.raw_body);
+                });
+        - lang: Python
+          source: |
+            import requests
+
+            url = "https://<TENANT_DOMAIN>/tenant/tenants/{tenantId}/applications/restricted-roles"
+            headers = {
+              "Authorization": "Basic <AUTHORIZATION>"
+            }
+            response = requests.request("GET", url, headers=headers)
+            print(response.text.encode("utf8"))
+      responses:
+        '200':
+          $ref: '#/components/responses/tenantRestrictedRolesFound'
+        '401':
+          $ref: '#/components/responses/unauthorizedError'
+        '403':
+          $ref: '#/components/responses/operationNotAuthorized'
+        '404':
+          $ref: '#/components/responses/tenantNotFound'
+    put:
+      operationId: putTenantApplicationRestrictedRolesResource
+      x-codegen-resource-name: updateRestrictedRoles
+      parameters:
+        - $ref: '#/components/parameters/acceptHeader'
+      tags:
+        - Tenant applications
+      security:
+        - Basic: []
+        - OAI-Secure: []
+        - SSO: []
+      summary: Replace the microservice applications restricted roles list
+      description: |
+        Replace tenant's restricted roles list entirely. Microservices that are subscribed to or owned by the tenant cannot request any role on this list.
+        Only roles that actually exist in the system are accepted. Duplicate roles in the request body are silently deduplicated.
+
+        <section><h5>Required roles</h5>
+        (ROLE_TENANT_MANAGEMENT_ADMIN <b>OR</b> ROLE_TENANT_MANAGEMENT_UPDATE <b>OR</b> ROLE_TENANT_ADMIN) <b>AND</b> (the current tenant is its parent <b>OR</b> is the management tenant <b>OR</b> is the current tenant)
+        </section>
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestrictedRoles'
+      x-code-samples:
+        - lang: cURL
+          source: |
+            curl --location --request PUT "https://<TENANT_DOMAIN>/tenant/tenants/{tenantId}/applications/restricted-roles" \
+            --header "Authorization: Basic <AUTHORIZATION>" \
+            --header "Accept: application/vnd.com.nsn.cumulocity.tenant+json" \
+            --header "Content-Type: application/json" \
+            --data-raw '["ROLE_TENANT_ADMIN","ROLE_TENANT_MANAGEMENT_ADMIN"]'
+        - lang: C#
+          source: |
+            var client = new RestClient("https://<TENANT_DOMAIN>/tenant/tenants/{tenantId}/applications/restricted-roles");
+            client.Timeout = -1;
+
+            var request = new RestRequest(Method.PUT);
+            request.AddHeader("Authorization", "Basic <AUTHORIZATION>");
+            request.AddHeader("Accept", "application/vnd.com.nsn.cumulocity.tenant+json");
+            request.AddHeader("Content-Type", "application/json");
+            request.AddParameter("application/json", "[\"ROLE_TENANT_ADMIN\",\"ROLE_TENANT_MANAGEMENT_ADMIN\"]", ParameterType.RequestBody);
+
+            IRestResponse response = client.Execute(request);
+            Console.WriteLine(response.Content);
+        - lang: Java
+          source: |
+            Unirest.setTimeouts(0, 0);
+            HttpResponse<String> response = Unirest.put("https://<TENANT_DOMAIN>/tenant/tenants/{tenantId}/applications/restricted-roles")
+                .header("Authorization", "Basic <AUTHORIZATION>")
+                .header("Accept", "application/vnd.com.nsn.cumulocity.tenant+json")
+                .header("Content-Type", "application/json")
+                .body("[\"ROLE_TENANT_ADMIN\",\"ROLE_TENANT_MANAGEMENT_ADMIN\"]")
+                .asString();
+            System.out.println(response);
+        - lang: Node.js
+          source: |
+            var unirest = require("unirest");
+            var req = unirest("PUT", "https://<TENANT_DOMAIN>/tenant/tenants/{tenantId}/applications/restricted-roles")
+                .headers({
+                    "Authorization": "Basic <AUTHORIZATION>",
+                    "Accept": "application/vnd.com.nsn.cumulocity.tenant+json",
+                    "Content-Type": "application/json"
+                })
+                .send(JSON.stringify(["ROLE_TENANT_ADMIN","ROLE_TENANT_MANAGEMENT_ADMIN"]))
+                .end(function (res) {
+                    if (res.error) throw new Error(res.error);
+                    console.log(res.raw_body);
+                });
+        - lang: Python
+          source: |
+            import requests
+            import json
+
+            url = "https://<TENANT_DOMAIN>/tenant/tenants/{tenantId}/applications/restricted-roles"
+            headers = {
+              "Authorization": "Basic <AUTHORIZATION>",
+              "Accept": "application/vnd.com.nsn.cumulocity.tenant+json",
+              "Content-Type": "application/json"
+            }
+            payload = json.dumps(["ROLE_TENANT_ADMIN", "ROLE_TENANT_MANAGEMENT_ADMIN"])
+            response = requests.request("PUT", url, headers=headers, data=payload)
+            print(response.text.encode("utf8"))
+      responses:
+        '200':
+          description: The restricted roles list was replaced and the updated tenant is sent in the response.
+          content:
+            application/vnd.com.nsn.cumulocity.tenant+json:
+              schema:
+                $ref: '#/components/schemas/tenantWithRestrictedRoles'
+        '401':
+          $ref: '#/components/responses/unauthorizedError'
+        '403':
+          $ref: '#/components/responses/operationNotAuthorized'
+        '404':
+          $ref: '#/components/responses/tenantNotFound'
+        '422':
+          description: Unprocessable Entity – one or more roles in the request body do not exist.
+  '/tenant/tenants/{tenantId}/applications/restricted-roles/{roleId}':
+    parameters:
+      - $ref: '#/components/parameters/tenantId'
+      - $ref: '#/components/parameters/roleId'
+    post:
+      operationId: postTenantApplicationRestrictedRoleResource
+      x-codegen-resource-name: addRestrictedRole
+      parameters:
+        - $ref: '#/components/parameters/acceptHeader'
+      tags:
+        - Tenant applications
+      security:
+        - Basic: []
+        - OAI-Secure: []
+        - SSO: []
+      summary: Add a role to the microservice restricted roles list
+      description: |
+        Add a single role to tenant's restricted roles list. Microservices that are subscribed to or owned by the tenant cannot request roles on this list.
+        If the role is already in the list, the request is accepted and the list remains unchanged.
+
+        <section><h5>Required roles</h5>
+        (ROLE_TENANT_MANAGEMENT_ADMIN <b>OR</b> ROLE_TENANT_MANAGEMENT_UPDATE <b>OR</b> ROLE_TENANT_ADMIN) <b>AND</b> (the current tenant is its parent <b>OR</b> is the management tenant <b>OR</b> is the current tenant)
+        </section>
+      x-code-samples:
+        - lang: cURL
+          source: |
+            curl --location --request POST "https://<TENANT_DOMAIN>/tenant/tenants/{tenantId}/applications/restricted-roles/{roleId}" \
+            --header "Authorization: Basic <AUTHORIZATION>" \
+            --header "Accept: application/vnd.com.nsn.cumulocity.tenant+json"
+        - lang: C#
+          source: |
+            var client = new RestClient("https://<TENANT_DOMAIN>/tenant/tenants/{tenantId}/applications/restricted-roles/{roleId}");
+            client.Timeout = -1;
+
+            var request = new RestRequest(Method.POST);
+            request.AddHeader("Authorization", "Basic <AUTHORIZATION>");
+            request.AddHeader("Accept", "application/vnd.com.nsn.cumulocity.tenant+json");
+
+            IRestResponse response = client.Execute(request);
+            Console.WriteLine(response.Content);
+        - lang: Java
+          source: |
+            Unirest.setTimeouts(0, 0);
+            HttpResponse<String> response = Unirest.post("https://<TENANT_DOMAIN>/tenant/tenants/{tenantId}/applications/restricted-roles/{roleId}")
+                .header("Authorization", "Basic <AUTHORIZATION>")
+                .header("Accept", "application/vnd.com.nsn.cumulocity.tenant+json")
+                .asString();
+            System.out.println(response);
+        - lang: Node.js
+          source: |
+            var unirest = require("unirest");
+            var req = unirest("POST", "https://<TENANT_DOMAIN>/tenant/tenants/{tenantId}/applications/restricted-roles/{roleId}")
+                .headers({
+                    "Authorization": "Basic <AUTHORIZATION>",
+                    "Accept": "application/vnd.com.nsn.cumulocity.tenant+json"
+                })
+                .end(function (res) {
+                    if (res.error) throw new Error(res.error);
+                    console.log(res.raw_body);
+                });
+        - lang: Python
+          source: |
+            import requests
+
+            url = "https://<TENANT_DOMAIN>/tenant/tenants/{tenantId}/applications/restricted-roles/{roleId}"
+            headers = {
+              "Authorization": "Basic <AUTHORIZATION>",
+              "Accept": "application/vnd.com.nsn.cumulocity.tenant+json"
+            }
+            response = requests.request("POST", url, headers=headers)
+            print(response.text.encode("utf8"))
+      responses:
+        '200':
+          description: The role was added and the updated tenant is sent in the response.
+          content:
+            application/vnd.com.nsn.cumulocity.tenant+json:
+              schema:
+                $ref: '#/components/schemas/tenantWithMoreRestrictedRoles'
+        '401':
+          $ref: '#/components/responses/unauthorizedError'
+        '403':
+          $ref: '#/components/responses/operationNotAuthorized'
+        '404':
+          $ref: '#/components/responses/tenantNotFound'
+        '422':
+          description: Unprocessable Entity – the specified role does not exist.
+    delete:
+      operationId: deleteTenantApplicationRestrictedRoleResource
+      x-codegen-resource-name: removeRestrictedRole
+      tags:
+        - Tenant applications
+      security:
+        - Basic: []
+        - OAI-Secure: []
+        - SSO: []
+      summary: Remove a role from the microservice restricted roles list
+      description: |
+        Remove a single role from tenant's restricted roles list. Microservices that are subscribed to or owned by the tenant cannot request any role on this list.
+
+        <section><h5>Required roles</h5>
+        (ROLE_TENANT_MANAGEMENT_ADMIN <b>OR</b> ROLE_TENANT_MANAGEMENT_UPDATE <b>OR</b> ROLE_TENANT_ADMIN) <b>AND</b> (the current tenant is its parent <b>OR</b> is the management tenant <b>OR</b> is the current tenant)
+        </section>
+      x-code-samples:
+        - lang: cURL
+          source: |
+            curl --location --request DELETE "https://<TENANT_DOMAIN>/tenant/tenants/{tenantId}/applications/restricted-roles/{roleId}" \
+            --header "Authorization: Basic <AUTHORIZATION>"
+        - lang: C#
+          source: |
+            var client = new RestClient("https://<TENANT_DOMAIN>/tenant/tenants/{tenantId}/applications/restricted-roles/{roleId}");
+            client.Timeout = -1;
+
+            var request = new RestRequest(Method.DELETE);
+            request.AddHeader("Authorization", "Basic <AUTHORIZATION>");
+
+            IRestResponse response = client.Execute(request);
+            Console.WriteLine(response.Content);
+        - lang: Java
+          source: |
+            Unirest.setTimeouts(0, 0);
+            HttpResponse<String> response = Unirest.delete("https://<TENANT_DOMAIN>/tenant/tenants/{tenantId}/applications/restricted-roles/{roleId}")
+                .header("Authorization", "Basic <AUTHORIZATION>").asString();
+            System.out.println(response);
+        - lang: Node.js
+          source: |
+            var unirest = require("unirest");
+            var req = unirest("DELETE", "https://<TENANT_DOMAIN>/tenant/tenants/{tenantId}/applications/restricted-roles/{roleId}")
+                .headers({
+                    "Authorization": "Basic <AUTHORIZATION>"
+                })
+                .end(function (res) {
+                    if (res.error) throw new Error(res.error);
+                    console.log(res.raw_body);
+                });
+        - lang: Python
+          source: |
+            import requests
+
+            url = "https://<TENANT_DOMAIN>/tenant/tenants/{tenantId}/applications/restricted-roles/{roleId}"
+            headers = {
+              "Authorization": "Basic <AUTHORIZATION>"
+            }
+            response = requests.request("DELETE", url, headers=headers)
+            print(response.text.encode("utf8"))
+      responses:
+        '200':
+          description: The role was removed and the updated tenant is sent in the response.
+          content:
+            application/vnd.com.nsn.cumulocity.tenant+json:
+              schema:
+                $ref: '#/components/schemas/tenantWithRestrictedRoles'
+        '401':
+          $ref: '#/components/responses/unauthorizedError'
+        '403':
+          $ref: '#/components/responses/operationNotAuthorized'
+        '404':
+          description: The role is not in the restricted roles list.
+          content:
+            application/vnd.com.nsn.cumulocity.error+json:
+              schema:
+                $ref: '#/components/schemas/error'
+        '422':
+          description: Unprocessable Entity – the specified role does not exist.
   '/tenant/tenants/{tenantId}/trusted-certificates':
     parameters:
       - $ref: '#/components/parameters/tenantId'
@@ -19741,6 +20488,7 @@ paths:
            In Cumulocity, a CRL check can be in online or offline mode or both.
 
         An endpoint to add revoked certificate serial numbers for offline CRL check via payload or file.
+        A file can be uploaded with either `PUT` or `POST`, a JSON payload is accepted by `PUT` only.
 
         For payload, a JSON object required with list of CRL entries, for example:
          ```json
@@ -19943,6 +20691,138 @@ paths:
           $ref: '#/components/responses/unauthorizedError'
         '403':
           $ref: '#/components/responses/accessDenied'
+    post:
+      operationId: postCRLSettings
+      x-codegen-resource-name: uploadCRL
+      tags:
+        - Trusted certificates
+      security:
+        - Basic: []
+        - OAI-Secure: []
+        - SSO: []
+      summary: Add revoked certificates
+      description: |
+        > **&#9432; Info:** A certificate revocation list (CRL) is a list of digital certificates
+           that have been revoked by the issuing certificate authority (CA) before expiration date.
+           In Cumulocity, a CRL check can be in online or offline mode or both.
+
+        An endpoint to add revoked certificate serial numbers for offline CRL check via payload or file.
+        A file can be uploaded with either `PUT` or `POST`, a JSON payload is accepted by `PUT` only.
+
+        For payload, a JSON object required with list of CRL entries, for example:
+         ```json
+           {
+            "crls": [
+              {
+                "serialNumberInHex": "1000",
+                "revocationDate": "2023-01-11T16:12:36.288Z"
+              }
+             ]
+            }
+          ```
+        Each entry is composed of:
+         * serialNumberInHex: Needs to be in `Hexadecimal Value`. e.g As (1000)^16 == (4096)^10, So we have to enter 1000.
+            If duplicate serial number exists in payload, the existing entry stays</br>
+         * `revocationDate` - accepted Date format: `yyyy-MM-dd'T'HH:mm:ss.SSS'Z'`, for example: `2023-01-11T16:12:36.288Z`.
+             This is an optional parameter and defaults to the current server UTC date time if not specified in the payload.
+             If specified and the date is in future then those entries will be also defaulted to current date.
+
+        For file upload, each file can hold at maximum 5000 revocation entries.
+        Multiple upload is allowed.
+        In case of duplicates, the latest (last uploaded) entry is considered.
+
+        See below for a sample CSV file:
+
+        | SERIAL NO.  | REVOCATION DATE |
+        |--|--|
+        | 1000 | 2023-01-11T16:12:36.288Z |
+
+         Each entry is composed of :
+         * serialNumberInHex: Needs to be in `Hexadecimal Value`. e.g (1000)^16 == (4096)^10, So we have to enter 1000.
+            If duplicate serial number exists in payload, the latest entry will be taken.</br>
+         * revocationDate: Accepted Date format: `yyyy-MM-dd'T'HH:mm:ss.SSS'Z'` e.g: 2023-01-11T16:12:36.288Z.
+         This is an optional and will be default to current server UTC date time if not specified in payload.
+         If specified and the date is in future then those entries will be skipped.
+
+        The CRL setting for offline and online check can be enabled/disabled using <kbd><a href="#operation/putOptionResource">/tenant/options</a></kbd>.
+        Keys are `crl.online.check.enabled` and `crl.offline.check.enabled` under the category `configuration`.
+
+        <section><h5>Required roles</h5>
+        (ROLE_TENANT_MANAGEMENT_ADMIN <b>OR</b> ROLE_TENANT_ADMIN) <b>AND</b> is the current tenant
+        </section>
+
+        **⚠️ Important:** According to CRL policy, added serial numbers cannot be reversed.
+      x-code-samples:
+        - lang: cURL
+          source: |
+            curl --location --request POST 'https://<TENANT_DOMAIN>/tenant/trusted-certificates/settings/crl' \
+            --header "Authorization: Basic <AUTHORIZATION>" \
+            --form 'file=@"/path_to_file/CRL_bulk_registration_template.csv"'
+        - lang: C#
+          source: |
+            var client = new RestClient("https://<TENANT_DOMAIN>/tenant/trusted-certificates/settings/crl");
+            client.Timeout = -1;
+            var request = new RestRequest(Method.POST);
+            request.AlwaysMultipartFormData = true;
+            request.AddHeader("Authorization", "Basic <AUTHORIZATION>");
+            request.AddFile("file", "/path_to_file/CRL_bulk_registration_template.csv");
+            IRestResponse response = client.Execute(request);
+            Console.WriteLine(response.Content);
+        - lang: Java
+          source: |
+            Unirest.setTimeouts(0, 0);
+            HttpResponse<String> response = Unirest.post("https://<TENANT_DOMAIN>/tenant/trusted-certificates/settings/crl")
+                .header("Authorization", "Basic <AUTHORIZATION>")
+                .field("file", new File("/path_to_file/CRL_bulk_registration_template.csv"))
+                .asString();
+            System.out.println(response);
+        - lang: Node.js
+          source: |
+            var unirest = require("unirest");
+            var req = unirest("POST", "https://<TENANT_DOMAIN>/tenant/trusted-certificates/settings/crl")
+                .headers({
+                    "Authorization": "Basic <AUTHORIZATION>",
+                })
+                .attach('file', '/path_to_file/CRL_bulk_registration_template.csv')
+                .end(function (res) {
+                    if (res.error) throw new Error(res.error);
+                    console.log(res.raw_body);
+                });
+        - lang: Python
+          source: |
+            import requests
+            url = "https://<TENANT_DOMAIN>/tenant/trusted-certificates/settings/crl"
+            payload = {}
+            files=[
+            ('file',('CRL_bulk_registration_template.csv',open('/path_to_file/CRL_bulk_registration_template.csv','rb'),'application/octet-stream'))
+            ]
+            headers = {
+              "Authorization": "Basic <AUTHORIZATION>",
+            }
+            response = requests.request("POST", url, headers=headers, data=payload, files=files)
+            print(response.text.encode("utf8"))
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  description: File to be uploaded.
+                  type: string
+                  format: binary
+      responses:
+        '204':
+          description: CRLs updated successfully.
+        '400':
+          $ref: '#/components/responses/unableToParseCRLEntries'
+        '401':
+          $ref: '#/components/responses/unauthorizedError'
+        '403':
+          $ref: '#/components/responses/accessDenied'
     get:
       operationId: getCRLSettings
       x-codegen-resource-name: downloadCrl
@@ -20103,7 +20983,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/accessToken'
+                $ref: '#/components/schemas/deviceAccessToken'
         '400':
           $ref: '#/components/responses/unableToParseCertBadRequest'
         '401':
@@ -21228,6 +22108,896 @@ paths:
           $ref: '#/components/responses/operationNotAuthorized'
         '404':
           $ref: '#/components/responses/loginOptionNotFound'
+  '/tenant/loginOptions/{typeOrId}/accessMappings':
+    post:
+      operationId: postAccessMappingResource
+      x-codegen-resource-name: createAccessMapping
+      parameters:
+        - $ref: '#/components/parameters/ssoLoginOptionTypeOrId'
+        - $ref: '#/components/parameters/queryParam_terminateUserSessions'
+        - $ref: '#/components/parameters/acceptHeader'
+      tags:
+        - Login options
+      security:
+        - Basic: []
+        - OAI-Secure: []
+        - SSO: []
+      summary: Create a login option access mapping
+      description: |
+        Create an authentication access mapping configuration on your tenant.
+
+        <section><h5>Required roles</h5>
+        ROLE_TENANT_ADMIN <b>OR</b> ROLE_TENANT_MANAGEMENT_ADMIN
+        </section>
+      requestBody:
+        required: true
+        content:
+          application/vnd.com.nsn.cumulocity.accessMapping+json:
+            example:
+              when:
+                operator: AND
+                childPredicates:
+                  - operator: EQ
+                    parameterPath: group
+                    value: '2'
+                    childPredicates: []
+              thenApplications:
+                - 2
+              thenGroups:
+                - 1
+                - 3
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/accessMapping'
+      x-code-samples:
+        - lang: cURL
+          source: |
+            curl --location --request POST "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings\
+            --header "Authorization: Basic <AUTHORIZATION>" \
+            --header "Accept: application/json" \
+            --header "Content-Type: application/json" \
+            --data-raw '<Payload>'
+        - lang: C#
+          source: |
+            var client = new RestClient("https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings);
+            client.Timeout = -1;
+
+            var request = new RestRequest(Method.POST);
+            request.AddHeader("Authorization", "Basic <AUTHORIZATION>");
+            request.AddHeader("Content-Type", "application/json");
+            request.AddHeader("Accept", "application/json");
+            request.AddParameter("application/json", "<Payload>",  ParameterType.RequestBody);
+
+            IRestResponse response = client.Execute(request);
+            Console.WriteLine(response.Content);
+        - lang: Java
+          source: |
+            Unirest.setTimeouts(0, 0);
+            HttpResponse<String> response = Unirest.post("https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings")
+                .header("Authorization", "Basic <AUTHORIZATION>")
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .body("<Payload>")
+                .asString();
+            System.out.println(response);
+        - lang: Node.js
+          source: |
+            var unirest = require("unirest");
+            var req = unirest("PUT", "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings")
+                .headers({
+                    "Authorization": "Basic <AUTHORIZATION>",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                })
+                .send(JSON.stringify( <Payload> ))
+                .end(function (res) {
+                    if (res.error) throw new Error(res.error);
+                    console.log(res.raw_body);
+                });
+        - lang: Python
+          source: |
+            import requests
+            import json
+
+            url = "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings"
+            headers = {
+              "Authorization": "Basic <AUTHORIZATION>",
+              "Accept": "application/json",
+              "Content-Type": "application/json"
+            }
+
+            response = requests.request("PUT", url, headers=headers, data = json.dumps(<Payload>))
+            print(response.text.encode("utf8"))
+      responses:
+        '200':
+          description: A login option access mapping was created.
+          content:
+            application/vnd.com.nsn.cumulocity.accessMapping+json:
+              schema:
+                $ref: '#/components/schemas/accessMappingWithId'
+        '401':
+          $ref: '#/components/responses/unauthorizedError'
+        '403':
+          $ref: '#/components/responses/operationNotAuthorized'
+        '422':
+          $ref: '#/components/responses/invalidPayload'
+    get:
+      operationId: getAccessMappingCollectionResource
+      x-codegen-resource-name: getAccessMappings
+      parameters:
+        - $ref: '#/components/parameters/ssoLoginOptionTypeOrId'
+      tags:
+        - Login options
+      security: []
+      summary: Retrieve all login option access mappings
+      description: |
+        Retrieve all access mappings available in the login option.
+
+        <section><h5>Required roles</h5>
+        ((ROLE_TENANT_ADMIN <b>OR</b> ROLE_TENANT_MANAGEMENT_READ <b>OR</b> ROLE_USER_MANAGEMENT_ADMIN <b>OR</b> ROLE_USER_MANAGEMENT_CREATE)
+        <b>AND</b> tenant access to login option is not restricted by management tenant)
+        </section>
+      x-code-samples:
+        - lang: cURL
+          source: |
+            curl --location --request GET "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings"
+        - lang: C#
+          source: |
+            var client = new RestClient("https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings");
+            client.Timeout = -1;
+
+            var request = new RestRequest(Method.GET);
+
+            IRestResponse response = client.Execute(request);
+            Console.WriteLine(response.Content);
+        - lang: Java
+          source: |
+            Unirest.setTimeouts(0, 0);
+            HttpResponse<String> response = Unirest.get("https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings").asString();
+        - lang: Node.js
+          source: |
+            var unirest = require("unirest");
+            var req = unirest("GET", "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings")
+                .end(function (res) {
+                    if (res.error) throw new Error(res.error);
+                    console.log(res.raw_body);
+                });
+        - lang: Python
+          source: |
+            import requests
+
+            response = requests.request("GET", "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings")
+            print(response.text.encode("utf8"))
+      responses:
+        '200':
+          description: A login option access mappings collection.
+          content:
+            application/vnd.com.nsn.cumulocity.accessMappingCollection+json:
+              schema:
+                $ref: '#/components/schemas/accessMappingCollection'
+        '401':
+          $ref: '#/components/responses/unauthorizedError'
+        '403':
+          $ref: '#/components/responses/operationNotAuthorized'
+  '/tenant/loginOptions/{typeOrId}/accessMappings/{id}':
+    get:
+      operationId: getAccessMappingResource
+      x-codegen-resource-name: getAccessMapping
+      parameters:
+        - $ref: '#/components/parameters/loginOptionTypeOrId'
+        - $ref: '#/components/parameters/accessMappingId'
+        - $ref: '#/components/parameters/acceptHeader'
+      tags:
+        - Login options
+      security:
+        - Basic: []
+        - OAI-Secure: []
+        - SSO: []
+      summary: Retrieve a specific access mapping
+      description: |
+        Retrieve a specific access mapping in the login option by the given ID.
+
+        <section><h5>Required roles</h5>
+        ((ROLE_TENANT_ADMIN <b>OR</b> ROLE_TENANT_MANAGEMENT_READ <b>OR</b> ROLE_USER_MANAGEMENT_ADMIN <b>OR</b> ROLE_USER_MANAGEMENT_CREATE)
+        <b>AND</b> tenant access to login option is not restricted by management tenant)
+        </section>
+      x-code-samples:
+        - lang: cURL
+          source: |
+            curl --location --request GET "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings/{id}" \
+            --header "Authorization: Basic <AUTHORIZATION>" \
+            --header "Accept: application/json" \
+        - lang: C#
+          source: |
+            var client = new RestClient("https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings/{id}");
+            client.Timeout = -1;
+
+            var request = new RestRequest(Method.GET);
+            request.AddHeader("Authorization", "Basic <AUTHORIZATION>");
+            request.AddHeader("Accept", "application/json");
+
+            IRestResponse response = client.Execute(request);
+            Console.WriteLine(response.Content);
+        - lang: Java
+          source: |
+            Unirest.setTimeouts(0, 0);
+            HttpResponse<String> response = Unirest.get("https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings/{id}")
+                .header("Authorization", "Basic <AUTHORIZATION>")
+                .header("Accept", "application/json")
+                .asString();
+            System.out.println(response);
+        - lang: Node.js
+          source: |
+            var unirest = require("unirest");
+            var req = unirest("GET", "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings/{id}")
+                .headers({
+                    "Authorization": "Basic <AUTHORIZATION>",
+                    "Accept": "application/json"
+                })
+                .end(function (res) {
+                    if (res.error) throw new Error(res.error);
+                    console.log(res.raw_body);
+                });
+        - lang: Python
+          source: |
+            import requests
+            import json
+
+            url = "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings/{id}"
+            headers = {
+              "Authorization": "Basic <AUTHORIZATION>",
+              "Accept": "application/json"
+            }
+            response = requests.request("PUT", url, headers=headers)
+            print(response.text.encode("utf8"))
+      responses:
+        '200':
+          description: A login option access mappings.
+          content:
+            application/vnd.com.nsn.cumulocity.accessMapping+json:
+              schema:
+                $ref: '#/components/schemas/accessMappingWithId'
+        '401':
+          $ref: '#/components/responses/unauthorizedError'
+        '403':
+          $ref: '#/components/responses/operationNotAuthorized'
+        '404':
+          $ref: '#/components/responses/accessMappingNotFound'
+    put:
+      operationId: putAccessMappingResource
+      x-codegen-resource-name: updateAccessMapping
+      parameters:
+        - $ref: '#/components/parameters/loginOptionTypeOrId'
+        - $ref: '#/components/parameters/accessMappingId'
+        - $ref: '#/components/parameters/queryParam_terminateUserSessions'
+        - $ref: '#/components/parameters/acceptHeader'
+      tags:
+        - Login options
+      security:
+        - Basic: []
+        - OAI-Secure: []
+        - SSO: []
+      summary: Update a specific access mapping
+      description: |
+        Update a specific access mapping in the login option by a given ID.
+
+        <section><h5>Required roles</h5>
+        ((ROLE_TENANT_ADMIN <b>OR</b> ROLE_TENANT_MANAGEMENT_ADMIN)
+        <b>AND</b> tenant access to login option is not restricted by management tenant)
+        </section>
+      requestBody:
+        required: true
+        content:
+          application/vnd.com.nsn.cumulocity.accessMapping+json:
+            example:
+              id: d7dfe6aa-6a7d-494b-9575-7e58c1651b86
+              when:
+                operator: AND
+                childPredicates:
+                  - operator: EQ
+                    parameterPath: group
+                    value: '2'
+                    childPredicates: []
+              thenApplications:
+                - 2
+              thenGroups:
+                - 1
+                - 3
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/accessMappingWithId'
+      x-code-samples:
+        - lang: cURL
+          source: |
+            curl --location --request PUT "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings/{id}\
+            --header "Authorization: Basic <AUTHORIZATION>" \
+            --header "Accept: application/json" \
+            --header "Content-Type: application/json" \
+            --data-raw '<Payload>'
+        - lang: C#
+          source: |
+            var client = new RestClient("https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings/{id});
+            client.Timeout = -1;
+
+            var request = new RestRequest(Method.PUT);
+            request.AddHeader("Authorization", "Basic <AUTHORIZATION>");
+            request.AddHeader("Content-Type", "application/json");
+            request.AddHeader("Accept", "application/json");
+            request.AddParameter("application/json", "<Payload>",  ParameterType.RequestBody);
+
+            IRestResponse response = client.Execute(request);
+            Console.WriteLine(response.Content);
+        - lang: Java
+          source: |
+            Unirest.setTimeouts(0, 0);
+            HttpResponse<String> response = Unirest.put("https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings/{id}")
+                .header("Authorization", "Basic <AUTHORIZATION>")
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .body("<Payload>")
+                .asString();
+            System.out.println(response);
+        - lang: Node.js
+          source: |
+            var unirest = require("unirest");
+            var req = unirest("PUT", "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings/{id}")
+                .headers({
+                    "Authorization": "Basic <AUTHORIZATION>",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                })
+                .send(JSON.stringify( <Payload> ))
+                .end(function (res) {
+                    if (res.error) throw new Error(res.error);
+                    console.log(res.raw_body);
+                });
+        - lang: Python
+          source: |
+            import requests
+            import json
+
+            url = "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings/{id}"
+            headers = {
+              "Authorization": "Basic <AUTHORIZATION>",
+              "Accept": "application/json",
+              "Content-Type": "application/json"
+            }
+
+            response = requests.request("PUT", url, headers=headers, data = json.dumps(<Payload>))
+            print(response.text.encode("utf8"))
+      responses:
+        '200':
+          description: A access mapping was updated.
+          content:
+            application/vnd.com.nsn.cumulocity.accessMapping+json:
+              schema:
+                $ref: '#/components/schemas/accessMappingWithId'
+        '401':
+          $ref: '#/components/responses/unauthorizedError'
+        '403':
+          $ref: '#/components/responses/operationNotAuthorized'
+        '404':
+          $ref: '#/components/responses/accessMappingNotFound'
+        '422':
+          $ref: '#/components/responses/invalidPayload'
+    delete:
+      operationId: deleteAccessMappingResource
+      x-codegen-resource-name: deleteAccessMapping
+      parameters:
+        - $ref: '#/components/parameters/loginOptionTypeOrId'
+        - $ref: '#/components/parameters/accessMappingId'
+        - $ref: '#/components/parameters/queryParam_terminateUserSessions'
+      tags:
+        - Login options
+      security:
+        - Basic: []
+        - OAI-Secure: []
+        - SSO: []
+      summary: Delete a specific access mapping
+      description: |
+        Delete a specific access mapping in the login option by a given ID.
+
+        <section><h5>Required roles</h5>
+        ((ROLE_TENANT_ADMIN <b>OR</b> ROLE_TENANT_MANAGEMENT_ADMIN)
+        <b>AND</b> tenant access to login option is not restricted by management tenant)
+        </section>
+      x-code-samples:
+        - lang: cURL
+          source: |
+            curl --location --request DELETE "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings/{id}" \
+            --header "Authorization: Basic <AUTHORIZATION>" \
+        - lang: C#
+          source: |
+            var client = new RestClient("https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings/{id}");
+            client.Timeout = -1;
+
+            var request = new RestRequest(Method.DELETE);
+            request.AddHeader("Authorization", "Basic <AUTHORIZATION>");
+
+            IRestResponse response = client.Execute(request);
+            Console.WriteLine(response.Content);
+        - lang: Java
+          source: |
+            Unirest.setTimeouts(0, 0);
+            HttpResponse<String> response = Unirest.delete("https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings/{id}")
+                .header("Authorization", "Basic <AUTHORIZATION>")
+                .asString();
+            System.out.println(response);
+        - lang: Node.js
+          source: |
+            var unirest = require("unirest");
+            var req = unirest("DELETE", "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings/{id}")
+                .headers({
+                    "Authorization": "Basic <AUTHORIZATION>"
+                })
+                .end(function (res) {
+                    if (res.error) throw new Error(res.error);
+                    console.log(res.raw_body);
+                });
+        - lang: Python
+          source: |
+            import requests
+            import json
+
+            url = "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/accessMappings/{id}"
+            headers = {
+              "Authorization": "Basic <AUTHORIZATION>"
+            }
+            response = requests.request("DELETE", url, headers=headers)
+            print(response.text.encode("utf8"))
+      responses:
+        '204':
+          description: A access mapping was removed.
+        '401':
+          $ref: '#/components/responses/unauthorizedError'
+        '403':
+          $ref: '#/components/responses/operationNotAuthorized'
+        '404':
+          $ref: '#/components/responses/accessMappingNotFound'
+  '/tenant/loginOptions/{typeOrId}/inventoryAccessMappings':
+    post:
+      operationId: postInventoryAccessMappingResource
+      x-codegen-resource-name: createInventoryAccessMapping
+      parameters:
+        - $ref: '#/components/parameters/ssoLoginOptionTypeOrId'
+        - $ref: '#/components/parameters/queryParam_terminateUserSessions'
+        - $ref: '#/components/parameters/acceptHeader'
+      tags:
+        - Login options
+      security:
+        - Basic: []
+        - OAI-Secure: []
+        - SSO: []
+      summary: Create an inventory access mapping
+      description: |
+        Create an inventory access mapping configuration on your tenant.
+
+        <section><h5>Required roles</h5>
+        ROLE_TENANT_ADMIN <b>OR</b> ROLE_TENANT_MANAGEMENT_ADMIN
+        </section>
+      requestBody:
+        required: true
+        content:
+          application/vnd.com.nsn.cumulocity.inventoryAccessMapping+json:
+            example:
+              when:
+                operator: AND
+                childPredicates:
+                  - childPredicates: []
+                    value: '2'
+                    operator: EQ
+                    parameterPath: group
+              thenInventoryRoles:
+                - managedObject: '358104'
+                  roleIds:
+                    - 1
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/inventoryAccessMapping'
+      x-code-samples:
+        - lang: cURL
+          source: |
+            curl --location --request POST "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings\
+            --header "Authorization: Basic <AUTHORIZATION>" \
+            --header "Accept: application/json" \
+            --header "Content-Type: application/json" \
+            --data-raw '<Payload>'
+        - lang: C#
+          source: |
+            var client = new RestClient("https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings);
+            client.Timeout = -1;
+
+            var request = new RestRequest(Method.POST);
+            request.AddHeader("Authorization", "Basic <AUTHORIZATION>");
+            request.AddHeader("Content-Type", "application/json");
+            request.AddHeader("Accept", "application/json");
+            request.AddParameter("application/json", "<Payload>",  ParameterType.RequestBody);
+
+            IRestResponse response = client.Execute(request);
+            Console.WriteLine(response.Content);
+        - lang: Java
+          source: |
+            Unirest.setTimeouts(0, 0);
+            HttpResponse<String> response = Unirest.post("https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings")
+                .header("Authorization", "Basic <AUTHORIZATION>")
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .body("<Payload>")
+                .asString();
+            System.out.println(response);
+        - lang: Node.js
+          source: |
+            var unirest = require("unirest");
+            var req = unirest("POST", "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings")
+                .headers({
+                    "Authorization": "Basic <AUTHORIZATION>",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                })
+                .send(JSON.stringify( <Payload> ))
+                .end(function (res) {
+                    if (res.error) throw new Error(res.error);
+                    console.log(res.raw_body);
+                });
+        - lang: Python
+          source: |
+            import requests
+            import json
+
+            url = "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings"
+            headers = {
+              "Authorization": "Basic <AUTHORIZATION>",
+              "Accept": "application/json",
+              "Content-Type": "application/json"
+            }
+            payload = json.dumps( <Payload> )
+            response = requests.request("POST", url, headers=headers, data=payload)
+            print(response.text.encode("utf8"))
+      responses:
+        '200':
+          description: An inventory access mapping was created.
+          content:
+            application/vnd.com.nsn.cumulocity.inventoryAccessMapping+json:
+              schema:
+                $ref: '#/components/schemas/inventoryAccessMappingWithId'
+        '401':
+          $ref: '#/components/responses/unauthorizedError'
+        '403':
+          $ref: '#/components/responses/operationNotAuthorized'
+        '422':
+          $ref: '#/components/responses/invalidPayload'
+    get:
+      operationId: getInventoryAccessMappingCollectionResource
+      x-codegen-resource-name: getInventoryAccessMappings
+      parameters:
+        - $ref: '#/components/parameters/ssoLoginOptionTypeOrId'
+      tags:
+        - Login options
+      security: []
+      summary: Retrieve all inventory access mappings
+      description: |
+        Retrieve all inventory access mappings available in the login option.
+
+        <section><h5>Required roles</h5>
+        ((ROLE_TENANT_ADMIN <b>OR</b> ROLE_TENANT_MANAGEMENT_READ <b>OR</b> ROLE_USER_MANAGEMENT_ADMIN <b>OR</b> ROLE_USER_MANAGEMENT_CREATE)
+        <b>AND</b> tenant access to login option is not restricted by management tenant)
+        </section>
+      x-code-samples:
+        - lang: cURL
+          source: |
+            curl --location --request GET "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings"
+        - lang: C#
+          source: |
+            var client = new RestClient("https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings");
+            client.Timeout = -1;
+
+            var request = new RestRequest(Method.GET);
+
+            IRestResponse response = client.Execute(request);
+            Console.WriteLine(response.Content);
+        - lang: Java
+          source: |
+            Unirest.setTimeouts(0, 0);
+            HttpResponse<String> response = Unirest.get("https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings").asString();
+        - lang: Node.js
+          source: |
+            var unirest = require("unirest");
+            var req = unirest("GET", "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings")
+                .end(function (res) {
+                    if (res.error) throw new Error(res.error);
+                    console.log(res.raw_body);
+                });
+        - lang: Python
+          source: |
+            import requests
+
+            response = requests.request("GET", "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings")
+            print(response.text.encode("utf8"))
+      responses:
+        '200':
+          description: An inventory access mappings collection.
+          content:
+            application/vnd.com.nsn.cumulocity.inventoryAccessMappingCollection+json:
+              schema:
+                $ref: '#/components/schemas/inventoryAccessMappingCollection'
+        '401':
+          $ref: '#/components/responses/unauthorizedError'
+        '403':
+          $ref: '#/components/responses/operationNotAuthorized'
+  '/tenant/loginOptions/{typeOrId}/inventoryAccessMappings/{id}':
+    get:
+      operationId: getInventoryAccessMappingResource
+      x-codegen-resource-name: getInventoryAccessMapping
+      parameters:
+        - $ref: '#/components/parameters/loginOptionTypeOrId'
+        - $ref: '#/components/parameters/inventoryAccessMappingId'
+        - $ref: '#/components/parameters/acceptHeader'
+      tags:
+        - Login options
+      security:
+        - Basic: []
+        - OAI-Secure: []
+        - SSO: []
+      summary: Retrieve a specific inventory access mapping
+      description: |
+        Retrieve a specific inventory access mapping in the login option by the given ID.
+
+        <section><h5>Required roles</h5>
+        ((ROLE_TENANT_ADMIN <b>OR</b> ROLE_TENANT_MANAGEMENT_READ <b>OR</b> ROLE_USER_MANAGEMENT_ADMIN <b>OR</b> ROLE_USER_MANAGEMENT_CREATE)
+        <b>AND</b> tenant access to login option is not restricted by management tenant)
+        </section>
+      x-code-samples:
+        - lang: cURL
+          source: |
+            curl --location --request GET "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings/{id}" \
+            --header "Authorization: Basic <AUTHORIZATION>" \
+            --header "Accept: application/json" \
+        - lang: C#
+          source: |
+            var client = new RestClient("https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings/{id}");
+            client.Timeout = -1;
+
+            var request = new RestRequest(Method.GET);
+            request.AddHeader("Authorization", "Basic <AUTHORIZATION>");
+            request.AddHeader("Accept", "application/json");
+
+            IRestResponse response = client.Execute(request);
+            Console.WriteLine(response.Content);
+        - lang: Java
+          source: |
+            Unirest.setTimeouts(0, 0);
+            HttpResponse<String> response = Unirest.get("https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings/{id}")
+                .header("Authorization", "Basic <AUTHORIZATION>")
+                .header("Accept", "application/json")
+                .asString();
+            System.out.println(response);
+        - lang: Node.js
+          source: |
+            var unirest = require("unirest");
+            var req = unirest("GET", "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings/{id}")
+                .headers({
+                    "Authorization": "Basic <AUTHORIZATION>",
+                    "Accept": "application/json"
+                })
+                .end(function (res) {
+                    if (res.error) throw new Error(res.error);
+                    console.log(res.raw_body);
+                });
+        - lang: Python
+          source: |
+            import requests
+            import json
+
+            url = "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings/{id}"
+            headers = {
+              "Authorization": "Basic <AUTHORIZATION>",
+              "Accept": "application/json"
+            }
+            response = requests.request("GET", url, headers=headers)
+            print(response.text.encode("utf8"))
+      responses:
+        '200':
+          description: An inventory access mapping.
+          content:
+            application/vnd.com.nsn.cumulocity.inventoryAccessMapping+json:
+              schema:
+                $ref: '#/components/schemas/inventoryAccessMappingWithId'
+        '401':
+          $ref: '#/components/responses/unauthorizedError'
+        '403':
+          $ref: '#/components/responses/operationNotAuthorized'
+        '404':
+          $ref: '#/components/responses/inventoryAccessMappingNotFound'
+    put:
+      operationId: putInventoryAccessMappingResource
+      x-codegen-resource-name: updateInventoryAccessMapping
+      parameters:
+        - $ref: '#/components/parameters/loginOptionTypeOrId'
+        - $ref: '#/components/parameters/inventoryAccessMappingId'
+        - $ref: '#/components/parameters/queryParam_terminateUserSessions'
+        - $ref: '#/components/parameters/acceptHeader'
+      tags:
+        - Login options
+      security:
+        - Basic: []
+        - OAI-Secure: []
+        - SSO: []
+      summary: Update a specific inventory access mapping
+      description: |
+        Update a specific inventory access mapping in the login option by a given ID.
+
+        <section><h5>Required roles</h5>
+        ((ROLE_TENANT_ADMIN <b>OR</b> ROLE_TENANT_MANAGEMENT_ADMIN)
+        <b>AND</b> tenant access to login option is not restricted by management tenant)
+        </section>
+      requestBody:
+        required: true
+        content:
+          application/vnd.com.nsn.cumulocity.inventoryAccessMapping+json:
+            example:
+              id: 5e7b7568-1f85-4e89-ae98-d7fbf4852fad
+              when:
+                operator: AND
+                childPredicates:
+                  - childPredicates: []
+                    value: '2'
+                    operator: EQ
+                    parameterPath: group
+              thenInventoryRoles:
+                - managedObject: '358104'
+                  roleIds:
+                    - 1
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/inventoryAccessMappingWithId'
+      x-code-samples:
+        - lang: cURL
+          source: |
+            curl --location --request PUT "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings/{id}\
+            --header "Authorization: Basic <AUTHORIZATION>" \
+            --header "Accept: application/json" \
+            --header "Content-Type: application/json" \
+            --data-raw '<Payload>'
+        - lang: C#
+          source: |
+            var client = new RestClient("https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings/{id});
+            client.Timeout = -1;
+
+            var request = new RestRequest(Method.PUT);
+            request.AddHeader("Authorization", "Basic <AUTHORIZATION>");
+            request.AddHeader("Content-Type", "application/json");
+            request.AddHeader("Accept", "application/json");
+            request.AddParameter("application/json", "<Payload>",  ParameterType.RequestBody);
+
+            IRestResponse response = client.Execute(request);
+            Console.WriteLine(response.Content);
+        - lang: Java
+          source: |
+            Unirest.setTimeouts(0, 0);
+            HttpResponse<String> response = Unirest.put("https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings/{id}")
+                .header("Authorization", "Basic <AUTHORIZATION>")
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .body("<Payload>")
+                .asString();
+            System.out.println(response);
+        - lang: Node.js
+          source: |
+            var unirest = require("unirest");
+            var req = unirest("PUT", "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings/{id}")
+                .headers({
+                    "Authorization": "Basic <AUTHORIZATION>",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                })
+                .send(JSON.stringify( <Payload> ))
+                .end(function (res) {
+                    if (res.error) throw new Error(res.error);
+                    console.log(res.raw_body);
+                });
+        - lang: Python
+          source: |
+            import requests
+            import json
+
+            url = "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings/{id}"
+            headers = {
+              "Authorization": "Basic <AUTHORIZATION>",
+              "Accept": "application/json",
+              "Content-Type": "application/json"
+            }
+            payload = json.dumps( <Payload> )
+            response = requests.request("PUT", url, headers=headers, data=payload)
+            print(response.text.encode("utf8"))
+      responses:
+        '200':
+          description: An inventory access mapping was updated.
+          content:
+            application/vnd.com.nsn.cumulocity.inventoryAccessMapping+json:
+              schema:
+                $ref: '#/components/schemas/inventoryAccessMappingWithId'
+        '401':
+          $ref: '#/components/responses/unauthorizedError'
+        '403':
+          $ref: '#/components/responses/operationNotAuthorized'
+        '404':
+          $ref: '#/components/responses/inventoryAccessMappingNotFound'
+        '422':
+          $ref: '#/components/responses/invalidPayload'
+    delete:
+      operationId: deleteInventoryAccessMappingResource
+      x-codegen-resource-name: deleteInventoryAccessMapping
+      parameters:
+        - $ref: '#/components/parameters/loginOptionTypeOrId'
+        - $ref: '#/components/parameters/inventoryAccessMappingId'
+        - $ref: '#/components/parameters/queryParam_terminateUserSessions'
+      tags:
+        - Login options
+      security:
+        - Basic: []
+        - OAI-Secure: []
+        - SSO: []
+      summary: Delete a specific inventory access mapping
+      description: |
+        Delete a specific inventory access mapping in the login option by a given ID.
+
+        <section><h5>Required roles</h5>
+        ((ROLE_TENANT_ADMIN <b>OR</b> ROLE_TENANT_MANAGEMENT_ADMIN)
+        <b>AND</b> tenant access to login option is not restricted by management tenant)
+        </section>
+      x-code-samples:
+        - lang: cURL
+          source: |
+            curl --location --request DELETE "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings/{id}" \
+            --header "Authorization: Basic <AUTHORIZATION>" \
+        - lang: C#
+          source: |
+            var client = new RestClient("https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings/{id}");
+            client.Timeout = -1;
+
+            var request = new RestRequest(Method.DELETE);
+            request.AddHeader("Authorization", "Basic <AUTHORIZATION>");
+
+            IRestResponse response = client.Execute(request);
+            Console.WriteLine(response.Content);
+        - lang: Java
+          source: |
+            Unirest.setTimeouts(0, 0);
+            HttpResponse<String> response = Unirest.delete("https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings/{id}")
+                .header("Authorization", "Basic <AUTHORIZATION>")
+                .asString();
+            System.out.println(response);
+        - lang: Node.js
+          source: |
+            var unirest = require("unirest");
+            var req = unirest("DELETE", "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings/{id}")
+                .headers({
+                    "Authorization": "Basic <AUTHORIZATION>"
+                })
+                .end(function (res) {
+                    if (res.error) throw new Error(res.error);
+                    console.log(res.raw_body);
+                });
+        - lang: Python
+          source: |
+            import requests
+            import json
+
+            url = "https://<TENANT_DOMAIN>/tenant/loginOptions/{typeOrId}/inventoryAccessMappings/{id}"
+            headers = {
+              "Authorization": "Basic <AUTHORIZATION>"
+            }
+            response = requests.request("DELETE", url, headers=headers)
+            print(response.text.encode("utf8"))
+      responses:
+        '204':
+          description: An inventory access mapping was removed.
+        '401':
+          $ref: '#/components/responses/unauthorizedError'
+        '403':
+          $ref: '#/components/responses/operationNotAuthorized'
+        '404':
+          $ref: '#/components/responses/inventoryAccessMappingNotFound'
   '/tenant/loginOptions/{typeOrId}/restrict':
     put:
       operationId: putAccessLoginOptionResource
@@ -21331,6 +23101,7 @@ paths:
       x-codegen-resource-name: obtainAccessCookies
       parameters:
         - $ref: '#/components/parameters/queryParam_tenant_id'
+        - $ref: '#/components/parameters/tfaCodeHeader'
         - $ref: '#/components/parameters/acceptHeader'
       tags:
         - Login tokens
@@ -21431,6 +23202,7 @@ paths:
       x-codegen-resource-name: obtainAccessToken
       parameters:
         - $ref: '#/components/parameters/queryParam_tenant_id'
+        - $ref: '#/components/parameters/tfaCodeHeader'
         - $ref: '#/components/parameters/acceptHeader'
       tags:
         - Login tokens
@@ -21517,6 +23289,126 @@ paths:
           $ref: '#/components/responses/unauthorizedError'
         '403':
           $ref: '#/components/responses/operationNotAuthorized'
+  /tenant/oauth/certificate:
+    post:
+      operationId: postCertificateAccessToken
+      x-codegen-resource-name: obtainAccessTokenWithCertificate
+      parameters:
+        - $ref: '#/components/parameters/queryParam_tenant_id'
+        - $ref: '#/components/parameters/tenantIdInHeader'
+        - $ref: '#/components/parameters/tokenResponseModeHeader'
+        - $ref: '#/components/parameters/tfaCodeHeader'
+        - $ref: '#/components/parameters/acceptHeader'
+      tags:
+        - Login tokens
+      security: []
+      summary: Obtain an access token with a certificate
+      description: |
+        Obtain a platform access token by presenting an X.509 certificate over standard HTTPS, without requiring mutual TLS (mTLS) or MQTT. This provides a REST-native, standard-port alternative for certificate-authenticated clients that cannot use MQTT or the dedicated mTLS endpoint.
+
+        The request body contains the leaf certificate, or the full certificate chain, in PEM format. By default the returned access token is encrypted as a JWE with the public key from the presented certificate, so that only the holder of the corresponding private key can decrypt it and use it as a `Bearer` token for subsequent REST API requests. The response format can be controlled with the `X-Cumulocity-Token-Response-Mode` header. JWE mode requires the certificate to use an RSA key, because the platform encrypts the token with `RSA-OAEP-256`; clients presenting a certificate with a non-RSA key must request a plain JWT with the `X-Cumulocity-Token-Response-Mode: jwt` header.
+
+        The platform derives the identity from the certificate subject, validates the certificate material against the tenant-trusted certificate authorities (including validity dates and revocation checks where configured) and confirms that the certificate is authorized for the resolved user. The tenant context must be established from the request before validation, for example through the `tenant_id` query parameter or the `X-Cumulocity-TenantId` header. The certificate is not used as the primary tenant identification mechanism.
+
+        If the resolved certificate identity is ambiguous, for example when the same certificate common name could resolve to both a regular user and a device user, the request is rejected and no token is issued. Untrusted, expired, revoked, malformed, unsupported or unmapped certificates are rejected as well.
+
+        If two-factor authentication (TFA) is active for the resolved user, it must be passed with the request as well, because the certificate replaces the password, not the second factor. Send the current TFA code in the `X-Cumulocity-TFA-Code` header. Both the TOTP and the SMS strategy are supported, in the same way as for the OAI-Secure login. Device users are never asked for a second factor.
+      requestBody:
+        required: true
+        content:
+          application/x-pem-file:
+            schema:
+              type: string
+              format: binary
+              description: Leaf certificate or full certificate chain in PEM format.
+              example: |-
+                -----BEGIN CERTIFICATE-----
+                MIIDTzCCAjegAwIBAgIUB1a5GM9ubBpN5tyU7YO8D3C8zUUwDQYJKoZIhvcNAQEL
+                ...
+                zngrsOfyKr8YYlDRy6RiAR2HQode00Hs4WoakfuTpaISZIs=
+                -----END CERTIFICATE-----
+      x-code-samples:
+        - lang: cURL
+          source: |
+            curl --location --request POST "https://<TENANT_DOMAIN>/tenant/oauth/certificate" \
+            --header "Content-Type: application/x-pem-file" \
+            --header "Accept: application/json" \
+            --header "X-Cumulocity-TenantId: <TENANT_ID>" \
+            --header "X-Cumulocity-Token-Response-Mode: jwe" \
+            --data-binary "@client-certificate.pem"
+        - lang: C#
+          source: |
+            var client = new RestClient("https://<TENANT_DOMAIN>/tenant/oauth/certificate");
+            client.Timeout = -1;
+
+            var request = new RestRequest(Method.POST);
+            request.AddHeader("Content-Type", "application/x-pem-file");
+            request.AddHeader("Accept", "application/json");
+            request.AddHeader("X-Cumulocity-TenantId", "<TENANT_ID>");
+            request.AddHeader("X-Cumulocity-Token-Response-Mode", "jwe");
+            request.AddParameter("application/x-pem-file", File.ReadAllText("client-certificate.pem"), ParameterType.RequestBody);
+
+            IRestResponse response = client.Execute(request);
+            Console.WriteLine(response.Content);
+        - lang: Java
+          source: |
+            Unirest.setTimeouts(0, 0);
+            String certificate = new String(Files.readAllBytes(Paths.get("client-certificate.pem")), java.nio.charset.StandardCharsets.US_ASCII);
+            HttpResponse<String> response = Unirest.post("https://<TENANT_DOMAIN>/tenant/oauth/certificate")
+                .header("Content-Type", "application/x-pem-file")
+                .header("Accept", "application/json")
+                .header("X-Cumulocity-TenantId", "<TENANT_ID>")
+                .header("X-Cumulocity-Token-Response-Mode", "jwe")
+                .body(certificate)
+                .asString();
+            System.out.println(response);
+        - lang: Node.js
+          source: |
+            var unirest = require("unirest");
+            var fs = require("fs");
+            var req = unirest("POST", "https://<TENANT_DOMAIN>/tenant/oauth/certificate")
+                .headers({
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-pem-file",
+                    "X-Cumulocity-TenantId": "<TENANT_ID>",
+                    "X-Cumulocity-Token-Response-Mode": "jwe"
+                })
+                .send(fs.readFileSync("client-certificate.pem"))
+                .end(function (res) {
+                    if (res.error) throw new Error(res.error);
+                    console.log(res.raw_body);
+                });
+        - lang: Python
+          source: |
+            import requests
+
+            url = "https://<TENANT_DOMAIN>/tenant/oauth/certificate"
+            headers = {
+              "Accept": "application/json",
+              "Content-Type": "application/x-pem-file",
+              "X-Cumulocity-TenantId": "<TENANT_ID>",
+              "X-Cumulocity-Token-Response-Mode": "jwe"
+            }
+            with open("client-certificate.pem", "rb") as certificate:
+              data = certificate.read()
+
+            response = requests.request("POST", url, headers=headers, data=data)
+            print(response.text.encode("utf8"))
+      responses:
+        '200':
+          description: The access token is sent in the response. By default it is a JWE encrypted with the public key from the presented certificate.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/certificateAccessToken'
+        '400':
+          $ref: '#/components/responses/unableToParseCertBadRequest'
+        '401':
+          $ref: '#/components/responses/x509CertificateValidationUnauthorizedError'
+        '403':
+          $ref: '#/components/responses/operationNotAuthorized'
+        '422':
+          $ref: '#/components/responses/jweUnsupportedCertificateKeyUnprocessableEntity'
   /tenant/options:
     post:
       operationId: postOptionCollectionResource
@@ -22279,11 +24171,10 @@ paths:
         If the CA certificate is removed from the trusted certificate list, corresponding public and private key removed automatically from the database collection.
         If a CA is already present, return a message indicating the CA is already present.
 
-        > **⚠️ Important:** Note that it is possible to call this endpoint without the ROLE_TENANT_MANAGEMENT_ADMIN or ROLE_TENANT_ADMIN role. Otherwise, if the the user does not have the required role, an HTTP response 403 will be returned.
-                <section><h5>Required roles</h5>
-                ROLE_TENANT_MANAGEMENT_ADMIN
-                ROLE_TENANT_ADMIN
-                </section>
+        <section><h5>Required roles</h5>
+        ROLE_TENANT_MANAGEMENT_ADMIN
+        ROLE_TENANT_ADMIN
+        </section>
       x-code-samples:
         - lang: cURL
           source: |
@@ -22378,11 +24269,10 @@ paths:
         The renewal will fail if either the public or private key is missing.
         If no CA exists, or if the current CA has more than 18 months remaining before expiration, a message will be returned indicating that the CA is either not present or not eligible for renewal.
 
-        > **⚠️ Important:** Note that it is possible to call this endpoint without the ROLE_TENANT_MANAGEMENT_ADMIN or ROLE_TENANT_ADMIN role. Otherwise, if the the user does not have the required role, an HTTP response 403 will be returned.
-                <section><h5>Required roles</h5>
-                ROLE_TENANT_MANAGEMENT_ADMIN
-                ROLE_TENANT_ADMIN
-                </section>
+        <section><h5>Required roles</h5>
+        ROLE_TENANT_MANAGEMENT_ADMIN
+        ROLE_TENANT_ADMIN
+        </section>
       x-code-samples:
         - lang: cURL
           source: |
@@ -22661,6 +24551,28 @@ components:
       schema:
         type: string
         example: t07007007
+    tokenResponseModeHeader:
+      name: X-Cumulocity-Token-Response-Mode
+      in: header
+      description: |
+        Optional. Selects the format of the returned access token. `jwe` (default) returns the access token as a JWE encrypted with the public key from the presented certificate (RSA-OAEP-256 for key encryption and AES-256-GCM for content encryption), so that only the holder of the corresponding private key can decrypt it; it requires the certificate to use an RSA key. `jwt` returns a plain, unencrypted JWT and is rejected with a 403 error unless plain JWT responses are enabled for the platform or the certificate does not use an RSA key. Unsupported values are rejected with a 400 error.
+      required: false
+      schema:
+        type: string
+        enum:
+          - jwe
+          - jwt
+        default: jwe
+        example: jwe
+    tfaCodeHeader:
+      name: X-Cumulocity-TFA-Code
+      in: header
+      description: |
+        Optional. Current TFA code of the user, if a TFA code is required to log in. For form-based OAI-Secure login, the code can be sent as the `tfa_code` field in the request body; this header is useful for requests that cannot include that field (for example when the request body is a certificate chain). If both are sent, the request body field takes precedence.
+      required: false
+      schema:
+        type: string
+        example: '123433'
     alarmId:
       name: id
       in: path
@@ -22996,6 +24908,33 @@ components:
         type: string
         minLength: 1
         example: OAUTH2
+    ssoLoginOptionTypeOrId:
+      name: typeOrId
+      in: path
+      description: The type or ID of the login option. The type's value is case insensitive and should be `OAUTH2`.
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        example: OAUTH2
+    accessMappingId:
+      name: id
+      in: path
+      description: Unique identifier of the access mapping.
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        example: d7dfe6aa-6a7d-494b-9575-7e58c1651b86
+    inventoryAccessMappingId:
+      name: id
+      in: path
+      description: Unique identifier of the inventory access mapping.
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        example: 5e7b7568-1f85-4e89-ae98-d7fbf4852fad
     featureKey:
       name: featureKey
       description: A unique key of the feature toggle.
@@ -23156,8 +25095,15 @@ components:
       name: text
       in: query
       description: |
-        Search for managed objects where a property value is equal to the given one.
-        The following properties are examined: `id, type, name, owner, externalIds`.
+        Perform full-text search on managed objects. The following properties are examined: `id`, `type`, `name`, `owner`, `externalIds`.
+
+        The search value is processed using full-text tokenization: the provided string is split into individual tokens at whitespace and certain special characters (such as `/`, `-`, `.`), and the search matches managed objects that contain **any** of those tokens in the examined properties.
+
+        For example, searching for `abc/def-ghi` produces the tokens `abc`, `def`, and `ghi`. As a result, managed objects whose examined properties contain any of these tokens will be returned, which may include unintended results.
+
+        To search for an exact phrase, wrap the value in double quotes (for example, `text="abc/def-ghi"`). This restricts results to managed objects that contain the full phrase rather than any individual token.
+
+        > **&#9432; Info:** If you need an exact match on a specific property, consider using the `query` parameter with an explicit filter expression instead (for example, `$filter=(name+eq+'abc/def-ghi')`).
       schema:
         type: string
         minLength: 1
@@ -23364,6 +25310,14 @@ components:
         format: date-time
         minLength: 10
         example: '2021-03-30'
+    queryParam_alarm_incrementCount:
+      name: incrementCount
+      in: query
+      description: 'When set to `true`, the `count` property of an existing alarm is incremented during upsert.'
+      schema:
+        type: boolean
+        default: false
+        example: true
     queryParam_application_type:
       name: type
       in: query
@@ -23447,6 +25401,14 @@ components:
         type: string
         minLength: 1
         example: tag1
+    queryParam_application_clearConflictingOptions:
+      name: clearConflictingOptions
+      in: query
+      description: 'If set to true and a tenant option category conflict is detected during microservice upload (i.e., the microservice attempts to use a category that already contains existing tenant options), all tenant options within the specified category will be removed prior to persisting the application. Tenant option conflicts are always validated during upload, regardless of the flag value.'
+      schema:
+        type: boolean
+        default: false
+        example: true
     queryParam_audit_application:
       name: application
       in: query
@@ -23893,11 +25855,19 @@ components:
     queryParam_users_username:
       name: username
       in: query
-      description: Prefix or full username
+      description: Prefix or full username (or alias). The search is case-insensitive.
       schema:
         type: string
         minLength: 1
         example: jdoe
+    queryParam_users_usernameContains:
+      name: usernameContains
+      in: query
+      description: Allows to search for users whose username (or alias) contains the provided string. The search is case-insensitive. Only one parameter (`username` or `usernameContains`) can be used in the request.
+      schema:
+        type: string
+        minLength: 3
+        example: doe
     queryParam_users_groups:
       name: groups
       in: query
@@ -24491,6 +26461,16 @@ components:
             error: applications/Bad Request
             message: Can not get bootstrap user. Application is not a microservice
             info: 'https://www.cumulocity.com/guides/reference-guide/#error_reporting'
+    applicationSubscribedByTenants:
+      description: Application was not deleted because it is subscribed by other tenants. Set `force=true` to unsubscribe all tenants before deletion.
+      content:
+        application/vnd.com.nsn.cumulocity.error+json:
+          schema:
+            $ref: '#/components/schemas/error'
+          example:
+            error: applications/Conflict
+            message: 'Failed to delete application.  : Cannot remove application subscribed to other tenants: [t231, t11134]'
+            info: 'https://www.cumulocity.com/guides/reference-guide/#error_reporting'
     groupNotFound:
       description: Group not found.
       content:
@@ -24569,6 +26549,17 @@ components:
             error: security/Unauthorized
             message: Invalid certificate chain!
             info: 'https://www.cumulocity.com/guides/reference-guide/#error_reporting'
+    jweUnsupportedCertificateKeyUnprocessableEntity:
+      description: |
+        The presented certificate does not use an RSA key, so the access token cannot be encrypted as a JWE. Request a plain JWT with the `X-Cumulocity-Token-Response-Mode: jwt` header instead.
+      content:
+        application/vnd.com.nsn.cumulocity.error+json:
+          schema:
+            $ref: '#/components/schemas/error'
+          example:
+            error: certificate-token/Unprocessable Entity
+            message: 'Only RSA certificates are supported for JWE mode. Use header X-Cumulocity-Token-Response-Mode: jwt for non-RSA certificates.'
+            info: 'https://www.cumulocity.com/guides/reference-guide/#error_reporting'
     unableToParseCRLEntries:
       description: Unsupported date time format.
       content:
@@ -24579,6 +26570,12 @@ components:
             error: Device Certificates/Bad Request
             message: "Unsupported date time format, supported format:yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
             info: 'https://www.cumulocity.com/guides/reference-guide/#error_reporting'
+    tenantRestrictedRolesFound:
+      description: The request has succeeded and the restricted roles list is sent in the response.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/RestrictedRoles'
     tenantApplicationReferenceFound:
       description: The request has succeeded and the tenant applications are sent in the response.
       content:
@@ -24718,6 +26715,26 @@ components:
                 visibleOnLoginPage: false
                 authenticationRestrictions:
                   forbiddenClients: WEB_BROWSERS
+    accessMappingNotFound:
+      description: Access mapping not found.
+      content:
+        application/vnd.com.nsn.cumulocity.error+json:
+          schema:
+            $ref: '#/components/schemas/error'
+          example:
+            error: tenants/Not Found
+            message: Cannot find mapping with id d7dfe6aa-6a7d-494b-9575-7e58c1651b86
+            info: 'https://www.cumulocity.com/guides/reference-guide/#error_reporting'
+    inventoryAccessMappingNotFound:
+      description: Inventory access mapping not found.
+      content:
+        application/vnd.com.nsn.cumulocity.error+json:
+          schema:
+            $ref: '#/components/schemas/error'
+          example:
+            error: tenants/Not Found
+            message: Cannot find inventory access mapping with id 5e7b7568-1f85-4e89-ae98-d7fbf4852fad
+            info: 'https://www.cumulocity.com/guides/reference-guide/#error_reporting'
     optionCollectionResourceFound:
       description: The request has succeeded and the options are sent in the response.
       content:
@@ -24885,6 +26902,99 @@ components:
         text: No data received from the device within the required interval.
         time: '2020-03-19T00:00:00.000Z'
         type: c8y_UnavailabilityAlarm
+    alarmUpsert:
+      type: object
+      required:
+        - source
+        - type
+      properties:
+        source:
+          description: The managed object to which the alarm is associated.
+          type: object
+          required:
+            - id
+          properties:
+            id:
+              $ref: '#/components/schemas/desc_objectId'
+        type:
+          description: Identifies the type of this alarm.
+          type: string
+        severity:
+          description: 'The severity of the alarm. If not specified, a new alarm will be created as MAJOR.'
+          type: string
+          enum:
+            - CRITICAL
+            - MAJOR
+            - MINOR
+            - WARNING
+        status:
+          description: 'The status of the alarm. If not specified, a new alarm will be created as ACTIVE.'
+          type: string
+          enum:
+            - ACTIVE
+            - ACKNOWLEDGED
+            - CLEARED
+        time:
+          description: 'The date and time when the alarm is triggered. Only applied when the alarm is created; ignored on update. If not provided, defaults to the current time.'
+          type: string
+          format: date-time
+        text:
+          description: 'Description of the alarm. If not specified, a new alarm will be created with an empty string.'
+          type: string
+      additionalProperties:
+        description: |
+          It is possible to add an arbitrary number of additional properties as a list of key-value pairs, for example, `"property1": {}`, `"property2": "value"`. These properties are known as custom fragments and can be of any type, for example, object or string. Each custom fragment is identified by a unique name.
+
+          Review [Getting started > Technical concepts > Cumulocity's domain model > Inventory > Fragments > Naming conventions of fragments](https://www.cumulocity.com/docs/concepts/domain-model/#naming-conventions-of-fragments) in the Cumulocity user documentation as there are characters that can not be used when naming custom fragments.
+        x-additionalPropertiesName: customFragments
+    alarmUpsertResponse:
+      type: object
+      required:
+        - alarm
+        - previousState
+      properties:
+        alarm:
+          description: The alarm as it exists after the upsert operation.
+          allOf:
+            - $ref: '#/components/schemas/alarm'
+        previousState:
+          description: |
+            A snapshot of the alarm as it existed immediately before the upsert. This field is `null` when the upsert
+            created a new alarm, and a full alarm representation when an existing alarm was updated.
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/alarm'
+      example:
+        alarm:
+          count: 1
+          creationTime: '2020-03-19T12:16:31.586Z'
+          lastUpdated: '2020-03-20T13:41:39.678Z'
+          id: '20200301'
+          self: 'https://<TENANT_DOMAIN>/alarm/alarms/20200301'
+          severity: MAJOR
+          source:
+            id: '251982'
+            name: My tracking device
+            self: 'https://<TENANT_DOMAIN>/inventory/managedObjects/251982'
+          status: ACTIVE
+          text: No data received from the device within the required interval.
+          time: '2020-03-19T00:00:00.000Z'
+          type: c8y_UnavailabilityAlarm
+        previousState:
+          count: 1
+          creationTime: '2020-03-19T12:16:31.586Z'
+          lastUpdated: '2020-03-19T12:16:31.586Z'
+          id: '20200301'
+          self: 'https://<TENANT_DOMAIN>/alarm/alarms/20200301'
+          severity: MINOR
+          source:
+            id: '251982'
+            name: My tracking device
+            self: 'https://<TENANT_DOMAIN>/inventory/managedObjects/251982'
+          status: ACKNOWLEDGED
+          text: No data received from the device within the required interval.
+          time: '2020-03-19T00:00:00.000Z'
+          type: c8y_UnavailabilityAlarm
     auditApiResource:
       type: object
       properties:
@@ -25281,6 +27391,110 @@ components:
             id: t07007007
         self: 'https://<TENANT_DOMAIN>/application/applications/20200301'
         type: HOSTED
+    application_no_microservice_manifest:
+      type: object
+      properties:
+        availability:
+          description: Application access level for other tenants.
+          type: string
+          enum:
+            - MARKET
+            - PRIVATE
+          default: PRIVATE
+        contextPath:
+          description: The context path in the URL makes the application accessible. Mandatory when the type of the application is `HOSTED`.
+          type: string
+          minLength: 1
+        description:
+          description: Description of the application.
+          type: string
+        id:
+          description: Unique identifier of the application.
+          type: string
+          readOnly: true
+        key:
+          description: 'Applications, regardless of their form, are identified by an application key.'
+          type: string
+          minLength: 1
+        name:
+          description: Name of the application.
+          type: string
+          minLength: 1
+        owner:
+          $ref: '#/components/schemas/application_owner'
+        self:
+          $ref: '#/components/schemas/desc_self'
+        type:
+          description: The type of the application.
+          type: string
+          enum:
+            - EXTERNAL
+            - HOSTED
+            - MICROSERVICE
+        manifest:
+          $ref: '#/components/schemas/web_application_manifest'
+        roles:
+          $ref: '#/components/schemas/application_roles'
+        requiredRoles:
+          $ref: '#/components/schemas/application_required_roles'
+        breadcrumbs:
+          description: |
+            A flag to indicate if the application has a breadcrumbs navigation on the UI.
+            > **&#9432; Info:** This property is specific to the web application type.
+          type: boolean
+        contentSecurityPolicy:
+          description: |
+            The content security policy of the application.
+            > **&#9432; Info:** This property is specific to the web application type.
+          type: string
+        dynamicOptionsUrl:
+          description: |
+            A URL to a JSON object with dynamic content options.
+            > **&#9432; Info:** This property is specific to the web application type.
+          type: string
+          example: /apps/public/public-options/options.json
+        globalTitle:
+          description: |
+            The global title of the application.
+            > **&#9432; Info:** This property is specific to the web application type.
+          type: string
+          example: Cumulocity
+        legacy:
+          description: |
+            A flag that shows if the application is a legacy application or not.
+            > **&#9432; Info:** This property is specific to the web application type.
+          type: boolean
+        rightDrawer:
+          description: |
+            A flag to indicate if the application uses the UI context menu on the right side.
+            > **&#9432; Info:** This property is specific to the web application type.
+          type: boolean
+        upgrade:
+          description: |
+            A flag that shows if the application is hybrid and using Angular and AngularJS simultaneously.
+            > **&#9432; Info:** This property is specific to the web application type.
+          type: boolean
+        activeVersionId:
+          description: The active version ID of the application. For microservice applications the active version ID is the microservice manifest version ID.
+          type: string
+          readOnly: true
+        resourcesUrl:
+          description: URL to the application base directory hosted on an external server. Only present in legacy hosted applications.
+          type: string
+          deprecated: true
+          readOnly: true
+      example:
+        availability: PRIVATE
+        contextPath: myapplication
+        id: '20200301'
+        key: my-application-key
+        name: my-application
+        owner:
+          self: 'https://<TENANT_DOMAIN>/tenant/tenants/t07007007'
+          tenant:
+            id: t07007007
+        self: 'https://<TENANT_DOMAIN>/application/applications/20200301'
+        type: HOSTED
     application_owner:
       description: Reference to the tenant owning this application. The default value is a reference to the current tenant.
       type: object
@@ -25491,35 +27705,13 @@ components:
           path: /health
           port: 80
     application_settings:
-      description: A list of settings objects for this microservice application.
-      type: array
-      items:
-        type: object
-        properties:
-          key:
-            description: The name of the setting.
-            type: string
-            example: hostkey-autosave
-          valueSchema:
-            description: The value schema determines the values that the microservice can process.
-            type: object
-            properties:
-              type:
-                description: The value schema type.
-                type: string
-                example: boolean
-          defaultValue:
-            description: The default value.
-            type: string
-            example: 'true'
-          editable:
-            description: Indicates if the value is editable.
-            type: boolean
-            example: true
-          inheritFromOwner:
-            description: Indicated wether this setting is inherited.
-            type: boolean
-            example: true
+      description: A map of settings for this microservice application.
+      type: object
+      additionalProperties:
+        type: string
+      example:
+        hostkey-autosave: 'true'
+        jwt.cache.guava.expireInSeconds: '10'
     bulkNewDeviceRequest:
       type: object
       properties:
@@ -25605,7 +27797,9 @@ components:
             >**&#9432; Info:** `groupId` and `failedParentId` are mutually exclusive. Use only one of them in your request.
           type: string
         startDate:
-          description: Date and time when the operations of this bulk operation should be created.
+          description: |
+            Date and time when the platform starts creating the operations of this bulk operation on a best-effort basis.
+            The exact creation and delivery times of the individual operations can vary.
           type: string
           format: date-time
         creationRamp:
@@ -25705,7 +27899,7 @@ components:
           example: '2020-06-09T09:48:40.008Z'
           readOnly: true
         password:
-          description: The user's password. Only Latin1 characters are allowed.
+          description: 'The user''s password. Allowed characters are: Latin letters (a–z, A–Z), digits (0–9), and the following special characters: ` ~ ! @ # $ % ^ & * ( ) _ | + - = ? ; : '' " , . < > { } [ ] \ /'
           type: string
           format: password
           writeOnly: true
@@ -25932,6 +28126,21 @@ components:
             self: 'https://<TENANT_DOMAIN>/identity/externalIds/c8y_Serial/simulator_145074_1'
             type: c8y_Serial
         self: 'https://<TENANT_DOMAIN>/identity/globalIds/251982/externalIds'
+    identitySearchCriteria:
+      type: object
+      required:
+        - externalIds
+      properties:
+        externalIds:
+          description: An array containing the list of external IDs to lookup.
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/externalId'
+      example:
+        externalIds:
+          - externalId: simulator_145074_1
+            type: c8y_Serial
     event:
       type: object
       properties:
@@ -26378,7 +28587,9 @@ components:
           type: object
         c8y_DeviceTypes:
           type: array
-          description: 'This fragment must be added in order to publish sample commands for a subset of devices sharing the same device type. If the fragment is present, the list of sample commands for a device type will be extended with the sample commands for the `c8y_DeviceTypes`. New sample commands created from the user interface will be created in the context of the `c8y_DeviceTypes`.'
+          description: |
+            This fragment must be added in order to publish sample commands for a subset of devices sharing the same device type. If the fragment is present, the list of sample commands for a device type
+            will be extended with the sample commands for the `c8y_DeviceTypes`. New sample commands created from the user interface will be created in the context of the `c8y_DeviceTypes`.
           items:
             type: string
         c8y_SupportedOperations:
@@ -26388,9 +28599,11 @@ components:
             type: string
       additionalProperties:
         description: |
-          It is possible to add an arbitrary number of additional properties as a list of key-value pairs, for example, `"property1": {}`, `"property2": "value"`. These properties are known as custom fragments and can be of any type, for example, object or string. Each custom fragment is identified by a unique name.
+          It is possible to add an arbitrary number of additional properties as a list of key-value pairs, for example, `"property1": {}`, `"property2": "value"`.
+          These properties are known as custom fragments and can be of any type, for example, object or string. Each custom fragment is identified by a unique name.
 
-          Review [Getting started > Technical concepts > Cumulocity's domain model > Inventory > Fragments > Naming conventions of fragments](https://www.cumulocity.com/docs/concepts/domain-model/#naming-conventions-of-fragments) in the Cumulocity user documentation as there are characters that can not be used when naming custom fragments.
+          Review [Getting started > Technical concepts > Cumulocity's domain model > Inventory > Fragments > Naming conventions of fragments](https://www.cumulocity.com/docs/concepts/domain-model/#naming-conventions-of-fragments)
+          in the Cumulocity user documentation as there are characters that can not be used when naming custom fragments.
         x-additionalPropertiesName: customFragments
       example:
         creationTime: '2017-12-12T22:09:06.881+01:00'
@@ -26434,6 +28647,102 @@ components:
         deviceParents:
           self: 'https://<TENANT_DOMAIN>/inventory/managedObjects/51994/deviceParents'
           references: []
+    managedObjectCreate:
+      type: object
+      properties:
+        name:
+          $ref: '#/components/schemas/desc_objectName'
+        type:
+          description: 'The fragment type can be interpreted as _device class_, this means, devices with the same type can receive the same types of configuration, software, firmware and operations. The type value is indexed and is therefore used for queries.'
+          type: string
+        externalIds:
+          description: List of external identifiers to bind to newly created managed object.
+          type: array
+          items:
+            $ref: '#/components/schemas/externalId'
+        c8y_IsDevice:
+          description: A fragment which identifies this managed object as a device.
+          type: object
+        c8y_IsDeviceGroup:
+          description: A fragment which identifies this managed object as a device group.
+          type: object
+        c8y_DeviceTypes:
+          type: array
+          description: |
+            This fragment must be added in order to publish sample commands for a subset of devices sharing the same device type. If the fragment is present, the list of sample commands for a device type
+            will be extended with the sample commands for the `c8y_DeviceTypes`. New sample commands created from the user interface will be created in the context of the `c8y_DeviceTypes`.
+          items:
+            type: string
+        c8y_SupportedOperations:
+          type: array
+          description: 'Lists the operations that are available for a particular device, so that applications can trigger the operations.'
+          items:
+            type: string
+      additionalProperties:
+        description: |
+          It is possible to add an arbitrary number of additional properties as a list of key-value pairs, for example, `"property1": {}`, `"property2": "value"`.
+          These properties are known as custom fragments and can be of any type, for example, object or string. Each custom fragment is identified by a unique name.
+
+          Review [Getting started > Technical concepts > Cumulocity's domain model > Inventory > Fragments > Naming conventions of fragments](https://www.cumulocity.com/docs/concepts/domain-model/#naming-conventions-of-fragments)
+          in the Cumulocity user documentation as there are characters that can not be used when naming custom fragments.
+        x-additionalPropertiesName: customFragments
+      example:
+        name: My tracking device
+        externalIds:
+          - externalId: simulator_145074_1
+            type: c8y_Serial
+        c8y_IsDevice: {}
+        c8y_DeviceTypes:
+          - deviceSubsetType
+        c8y_SupportedOperations:
+          - c8y_Restart
+    managedObjectUpdate:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          description: Unique identifier of the object.
+          type: string
+        name:
+          $ref: '#/components/schemas/desc_objectName'
+        type:
+          description: 'The fragment type can be interpreted as _device class_, this means, devices with the same type can receive the same types of configuration, software, firmware and operations. The type value is indexed and is therefore used for queries.'
+          type: string
+        c8y_IsDevice:
+          description: A fragment which identifies this managed object as a device.
+          type: object
+        c8y_IsDeviceGroup:
+          description: A fragment which identifies this managed object as a device group.
+          type: object
+        c8y_DeviceTypes:
+          type: array
+          description: |
+            This fragment must be added in order to publish sample commands for a subset of devices sharing the same device type. If the fragment is present, the list of sample commands for a device type
+            will be extended with the sample commands for the `c8y_DeviceTypes`. New sample commands created from the user interface will be created in the context of the `c8y_DeviceTypes`.
+          items:
+            type: string
+        c8y_SupportedOperations:
+          type: array
+          description: 'Lists the operations that are available for a particular device, so that applications can trigger the operations.'
+          items:
+            type: string
+      additionalProperties:
+        description: |
+          It is possible to add an arbitrary number of additional properties as a list of key-value pairs, for example, `"property1": {}`, `"property2": "value"`.
+          These properties are known as custom fragments and can be of any type, for example, object or string. Each custom fragment is identified by a unique name.
+
+          Review [Getting started > Technical concepts > Cumulocity's domain model > Inventory > Fragments > Naming conventions of fragments](https://www.cumulocity.com/docs/concepts/domain-model/#naming-conventions-of-fragments)
+          in the Cumulocity user documentation as there are characters that can not be used when naming custom fragments.
+        x-additionalPropertiesName: customFragments
+      example:
+        id: '51994'
+        name: My tracking device
+        c8y_IsDevice: {}
+        c8y_DeviceTypes:
+          - deviceSubsetType
+        c8y_SupportedOperations:
+          - c8y_Restart
     managedObjectAvailability:
       type: object
       properties:
@@ -26447,7 +28756,7 @@ components:
           type: string
           format: date-time
           description: The time when the device sent the last message to Cumulocity.
-          example: '20130-03-19T00:00:00.000Z'
+          example: '2013-03-19T00:00:00.000Z'
         interval:
           type: integer
           description: Required interval of monitored device
@@ -27119,7 +29428,7 @@ components:
           readOnly: true
         password:
           description: |
-            The user's password. Only Latin1 characters are allowed.
+            The user's password. Allowed characters are: Latin letters (a–z, A–Z), digits (0–9), and the following special characters: ` ~ ! @ # $ % ^ & * ( ) _ | + - = ? ; : ' " , . < > { } [ ] \ /
 
             If you do not specify a password when creating a new user with a POST request, it must contain the property `sendPasswordResetEmail` with a value of `true`.
           type: string
@@ -27483,6 +29792,68 @@ components:
           references: []
         parent: t1511681
         status: ACTIVE
+    tenantWithRestrictedRoles:
+      allOf:
+        - $ref: '#/components/schemas/tenant'
+      example:
+        id: t07007007
+        self: 'https://<TENANT_DOMAIN>/tenant/tenants/t07007007'
+        adminEmail: john@doe.com
+        adminName: johndoe
+        allowCreateTenants: false
+        applications:
+          self: 'https://<TENANT_DOMAIN>/tenant/tenants/t07007007/applications'
+          references: []
+        company: ACME AG
+        contactName: John Doe
+        contactPhone: +52 333 567 1234
+        creationTime: '2020-05-02T20:00:29.907Z'
+        customProperties:
+          msForbiddenRoles:
+            - ROLE_TENANT_ADMIN
+            - ROLE_TENANT_MANAGEMENT_ADMIN
+        domain: mytenant.cumulocity.com
+        ownedApplications:
+          self: 'https://<TENANT_DOMAIN>/tenant/tenants/t07007007/applications'
+          references: []
+        parent: t1511681
+        status: ACTIVE
+    tenantWithMoreRestrictedRoles:
+      allOf:
+        - $ref: '#/components/schemas/tenant'
+      example:
+        id: t07007007
+        self: 'https://<TENANT_DOMAIN>/tenant/tenants/t07007007'
+        adminEmail: john@doe.com
+        adminName: johndoe
+        allowCreateTenants: false
+        applications:
+          self: 'https://<TENANT_DOMAIN>/tenant/tenants/t07007007/applications'
+          references: []
+        company: ACME AG
+        contactName: John Doe
+        contactPhone: +52 333 567 1234
+        creationTime: '2020-05-02T20:00:29.907Z'
+        customProperties:
+          msForbiddenRoles:
+            - ROLE_TENANT_ADMIN
+            - ROLE_TENANT_MANAGEMENT_ADMIN
+            - ROLE_TENANT_ALARM_ADMIN
+        domain: mytenant.cumulocity.com
+        ownedApplications:
+          self: 'https://<TENANT_DOMAIN>/tenant/tenants/t07007007/applications'
+          references: []
+        parent: t1511681
+        status: ACTIVE
+    RestrictedRoles:
+      description: An array of role names that are restricted from being requested by microservices in the tenant.
+      type: array
+      items:
+        type: string
+        minLength: 1
+      example:
+        - ROLE_TENANT_ADMIN
+        - ROLE_TENANT_MANAGEMENT_ADMIN
     option:
       description: A tuple storing tenant configuration.
       type: object
@@ -27513,6 +29884,129 @@ components:
           type: boolean
           default: false
           example: false
+    accessMappingCollection:
+      description: All available access mappings in the login option.
+      type: object
+      properties:
+        accessMappings:
+          description: An array containing the available access mappings.
+          type: array
+          items:
+            $ref: '#/components/schemas/accessMappingWithId'
+        self:
+          allOf:
+            - $ref: '#/components/schemas/desc_self'
+          example: 'https://<TENANT_DOMAIN>/tenant/loginOptions/OAUTH2/accessMappings'
+    accessMappingWithId:
+      allOf:
+        - type: object
+          properties:
+            id:
+              type: string
+              description: Unique identifier of this access mapping.
+          example:
+            id: d7dfe6aa-6a7d-494b-9575-7e58c1651b86
+        - $ref: '#/components/schemas/accessMapping'
+        - type: object
+          properties:
+            self:
+              $ref: '#/components/schemas/desc_self'
+          example:
+            self: 'https://<TENANT_DOMAIN>/tenant/loginOptions/OAUTH2/accessMappings/d7dfe6aa-6a7d-494b-9575-7e58c1651b86'
+    accessMapping:
+      description: Represents information of mapping access to groups and applications.
+      type: object
+      properties:
+        when:
+          description: Defines the condition that must be satisfied for this access mapping to apply.
+          type: object
+          properties:
+            operator:
+              description: 'Logical operator used to combine all child predicates (e.g. AND, OR).'
+              type: string
+              example: AND
+            childPredicates:
+              description: List of predicates that are evaluated and combined using the operator.
+              type: object
+              $ref: '#/components/schemas/JSONPredicateRepresentation'
+        thenApplications:
+          description: List of the applications' identifiers.
+          type: array
+          items:
+            type: integer
+          example:
+            - 2
+        thenGroups:
+          description: List of the groups' identifiers.
+          type: array
+          items:
+            type: integer
+            example:
+              - 1
+              - 3
+    inventoryAccessMappingCollection:
+      description: All available inventory access mappings in the login option.
+      type: object
+      properties:
+        inventoryAccessMappings:
+          description: An array containing the available inventory access mappings.
+          type: array
+          items:
+            $ref: '#/components/schemas/inventoryAccessMappingWithId'
+        self:
+          allOf:
+            - $ref: '#/components/schemas/desc_self'
+          example: 'https://<TENANT_DOMAIN>/tenant/loginOptions/OAUTH2/inventoryAccessMappings'
+    inventoryAccessMappingWithId:
+      allOf:
+        - type: object
+          properties:
+            id:
+              type: string
+              description: Unique identifier of this inventory mapping.
+          example:
+            id: 5e7b7568-1f85-4e89-ae98-d7fbf4852fad
+        - $ref: '#/components/schemas/inventoryAccessMapping'
+        - type: object
+          properties:
+            self:
+              $ref: '#/components/schemas/desc_self'
+          example:
+            self: 'https://<TENANT_DOMAIN>/tenant/loginOptions/OAUTH2/inventoryAccessMappings/5e7b7568-1f85-4e89-ae98-d7fbf4852fad'
+    inventoryAccessMapping:
+      description: Represents information of mapping access to inventory roles.
+      type: object
+      properties:
+        when:
+          description: Defines the condition that must be satisfied for this access mapping to apply.
+          type: object
+          properties:
+            operator:
+              description: 'Logical operator used to combine all child predicates (e.g. AND, OR).'
+              type: string
+              example: AND
+            childPredicates:
+              description: List of predicates that are evaluated and combined using the operator.
+              type: object
+              $ref: '#/components/schemas/JSONPredicateRepresentation'
+        thenInventoryRoles:
+          description: List of the OAuth inventory assignments.
+          type: array
+          items:
+            description: Represents inventory roles for a specific device group.
+            type: object
+            properties:
+              managedObject:
+                description: A unique identifier for the managed object for which the roles are assigned.
+                type: string
+                example: '358104'
+              roleIds:
+                description: List of the inventory roles' identifiers.
+                type: array
+                items:
+                  type: integer
+                example:
+                  - 1
     authConfig:
       description: Parameters determining the authentication process.
       type: object
@@ -27599,45 +30093,12 @@ components:
                   description: Represents rules used to assign groups and applications.
                   type: array
                   items:
-                    description: Represents information of mapping access to groups and applications.
-                    type: object
-                    properties:
-                      when:
-                        $ref: '#/components/schemas/JSONPredicateRepresentation'
-                      thenApplications:
-                        description: List of the applications' identifiers.
-                        type: array
-                        items:
-                          type: integer
-                      thenGroups:
-                        description: List of the groups' identifiers.
-                        type: array
-                        items:
-                          type: integer
+                    $ref: '#/components/schemas/accessMappingWithId'
                 inventoryMappings:
                   description: Represents rules used to assign inventory roles.
                   type: array
                   items:
-                    description: Represents information of mapping access to inventory roles.
-                    type: object
-                    properties:
-                      when:
-                        $ref: '#/components/schemas/JSONPredicateRepresentation'
-                      thenInventoryRoles:
-                        description: List of the OAuth inventory assignments.
-                        type: array
-                        items:
-                          description: Represents inventory roles for a specific device group.
-                          type: object
-                          properties:
-                            managedObject:
-                              description: A unique identifier for the managed object for which the roles are assigned.
-                              type: string
-                            roleIds:
-                              description: List of the inventory roles' identifiers.
-                              type: array
-                              items:
-                                type: integer
+                    $ref: '#/components/schemas/inventoryAccessMappingWithId'
         providerName:
           description: The name of the authentication provider.
           type: string
@@ -27734,7 +30195,8 @@ components:
           description: SSO specific. Points to the field in the obtained JWT access token that should be used as the username in the Cumulocity platform.
           properties:
             constantValue:
-              description: Used only when `useConstantValue` is set to `true`.
+              description: 'Used only if `useConstantValue` is set to `true`. It cannot contain whitespace, slashes nor any of `+$:` characters.'
+              maxLength: 1000
               type: string
             jwtField:
               description: The name of the field containing the JWT.
@@ -27763,7 +30225,8 @@ components:
               type: object
               properties:
                 constantValue:
-                  description: Used only if `useConstantValue` is set to `true`.
+                  description: 'Used only if `useConstantValue` is set to `true`. It cannot contain whitespace, slashes nor any of `+$:` characters.'
+                  maxLength: 1000
                   type: string
                 jwtField:
                   description: The name of the field containing the JWT.
@@ -27849,7 +30312,7 @@ components:
             - IN
             - AND
             - OR
-          example: AND
+          example: EQ
         parameterPath:
           description: Path to the claim from the JWT access token from the external authorization server.
           type: string
@@ -28507,6 +30970,40 @@ components:
           totalPages: 1
           pageSize: 5
           currentPage: 1
+    ManagedObjectCollectionCreate:
+      type: object
+      required:
+        - managedObjects
+      properties:
+        managedObjects:
+          description: An array containing the managed objects to create.
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/managedObjectCreate'
+      example:
+        managedObjects:
+          - name: My tracking device
+            c8y_IsDevice: {}
+    ManagedObjectCollectionUpdate:
+      type: object
+      required:
+        - managedObjects
+      properties:
+        managedObjects:
+          description: An array containing the managed objects to update.
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/managedObjectUpdate'
+      example:
+        managedObjects:
+          - id: '51994'
+            name: My tracking device
+            owner: manga
+            c8y_IsDevice: {}
     ManagedObjectReferenceCollection:
       type: object
       properties:
@@ -29737,6 +32234,52 @@ components:
           description: Access token generated by the Cumulocity platform.
           type: string
           example: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJhZGY0ODI3Yi00ZjZjLTRiMTktYTJmYy0x...S-04HPk3G5OezjCP8oQUAIG87wd-fHyJ2oKSuetWFWpUSBPzJzl_73_3yauIlplHorlSoQ
+    deviceAccessToken:
+      description: OAI-Secure access token for devices.
+      type: object
+      properties:
+        accessToken:
+          description: Access token generated by the Cumulocity platform.
+          type: string
+          example: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJhZGY0ODI3Yi00ZjZjLTRiMTktYTJmYy0x...S-04HPk3G5OezjCP8oQUAIG87wd-fHyJ2oKSuetWFWpUSBPzJzl_73_3yauIlplHorlSoQ
+        idToken:
+          type: string
+          example: null
+        expiresIn:
+          type: integer
+          example: null
+        refreshToken:
+          type: string
+          example: null
+        info:
+          type: object
+          example: null
+    certificateAccessToken:
+      description: |
+        Access token obtained by presenting an X.509 certificate. By default the token is returned as a JWE encrypted with the public key from the presented certificate, so that only the holder of the corresponding private key can decrypt it. This requires the certificate to use an RSA key, because the platform encrypts the token with `RSA-OAEP-256`.
+
+        A plain, unencrypted JWT can be requested with the `X-Cumulocity-Token-Response-Mode: jwt` header, but such requests are rejected with a 403 error unless plain JWT responses have been explicitly enabled for the platform. Clients whose certificate does not use an RSA key are exempt from that restriction, as JWE mode is not available to them: they may always request `jwt`, and must do so, because a request left in the default `jwe` mode is rejected with a 422 error.
+      type: object
+      properties:
+        access_token:
+          description: 'The access token generated by the Cumulocity platform. A JWE compact-serialized, encrypted JWT when `response_mode` is `jwe`, or a plain, unencrypted JWT when `response_mode` is `jwt`.'
+          type: string
+          example: eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIn0.g_hEwksO1Ax8Qn7HoN-BVeBoa8FXe0kpyk_XdcSmxvcM5_P296JXXtoHISr_DD_M...48V95cLzdVlCyoQ
+        token_type:
+          description: The type of the returned token.
+          type: string
+          example: Bearer
+        response_mode:
+          description: The format of the returned access token. `jwe` unless a plain JWT was requested with the `X-Cumulocity-Token-Response-Mode` header and permitted.
+          type: string
+          enum:
+            - jwe
+            - jwt
+          example: jwe
+        expires_in:
+          description: The token lifetime in seconds.
+          type: integer
+          example: 3600
     SystemOptionCollection:
       description: All available system options of the tenant.
       type: object
@@ -29971,7 +32514,11 @@ components:
               $ref: '#/components/schemas/desc_self'
         subscription:
           type: string
-          description: The subscription name. Each subscription is identified by a unique name within a specific context.
+          description: |
+            The subscription name.
+            The name identifies the Messaging Service topic that messages for this subscription will be published to.
+            Several subscriptions can share the same name, which means that the same topic will receive messages for all those subscriptions.
+            See [topics and subscriptions](#section/Overview/Topics-and-subscriptions) for more details.
           pattern: '^[a-zA-Z0-9]+$'
           minLength: 1
         subscriptionFilter:

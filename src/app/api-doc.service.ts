@@ -32,7 +32,7 @@ export class ApiDocService {
     contextPath: 'api-doc',
     downloadPath: './c8y-oas.yml',
     icon: {
-      class: 'c8y-icon-cumulocity-iot',
+      class: 'c8y-icon-c8y-c',
     },
     manifest: {
       openApiSpec: 'c8y-oas.yml',
