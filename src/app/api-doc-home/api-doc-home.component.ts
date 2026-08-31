@@ -1,5 +1,5 @@
 import { AsyncPipe } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import {
   AppIconComponent,
@@ -31,6 +31,7 @@ import { ApiDocService } from '../api-doc.service';
     C8yTranslatePipe,
     AppIconComponent,
   ],
+  changeDetection: ChangeDetectionStrategy.Eager,
 })
 export class ApiDocHomeComponent {
   private apiDocService = inject(ApiDocService);

@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { AppIconComponent } from '@c8y/ngx-components';
 
 export function createAppIconComponent(app: any) {
@@ -8,6 +8,7 @@ export function createAppIconComponent(app: any) {
     styleUrls: ['./app-icon-navigator.component.scss'],
     standalone: true,
     imports: [AppIconComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
   })
   class AppIconNavigatorComponent {
     app = app;

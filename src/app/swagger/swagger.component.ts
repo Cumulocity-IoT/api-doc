@@ -7,6 +7,7 @@ import {
   OnDestroy,
   ViewChild,
   ViewEncapsulation,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { FetchClient } from '@c8y/client';
@@ -27,6 +28,7 @@ import { ApiDocService } from '../api-doc.service';
   styleUrls: ['./swagger.component.scss'],
   encapsulation: ViewEncapsulation.None,
   imports: [IconDirective, ActionBarItemComponent, C8yTranslatePipe, TitleComponent, AsyncPipe],
+  changeDetection: ChangeDetectionStrategy.Eager,
 })
 export class SwaggerComponent implements OnDestroy, AfterViewInit {
   @ViewChild('apiDocElement', { static: true }) apiDocElement: ElementRef | undefined;
