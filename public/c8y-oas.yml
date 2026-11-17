@@ -24360,7 +24360,7 @@ paths:
 
         > **⚠️ Important:** CSR must be a valid `PKCS#10` with deviceID as Common Name (CN).
 
-        > **&#9432; Info:** CSR request with `CA:TRUE` constraint is not supported.
+        > **&#9432; Info:** CSR request with `CA:TRUE` constraint is not supported. 
       x-code-samples:
         - lang: cURL
           source: |
@@ -24461,7 +24461,7 @@ paths:
 
           > **⚠️ Important:** CSR must be a valid `PKCS#10` with deviceID as Common Name (CN).
 
-          > **&#9432; Info:** CSR request with `CA:TRUE` constraint is not supported.
+          > **&#9432; Info:** CSR request with `CA:TRUE` constraint is not supported. 
       x-code-samples:
         $ref: '#/paths/~1.well-known~1est~1simpleenroll/post/x-code-samples'
       requestBody:
@@ -29038,7 +29038,7 @@ components:
         enrollmentToken:
           type: string
           description: |
-            When creating [a new device enrollment request](#tag/Device-enrollment) this field is treated as device's one time password (OTP).
+            When creating [a new device enrollment request](#tag/Device-enrollment) this field is treated as device's one time password (OTP).   
       example:
         id: '54545454'
         self: 'https://<TENANT_DOMAIN>/devicecontrol/newDeviceRequests/54545454'
